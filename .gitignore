@@ -1,0 +1,21 @@
+# Python 캐시 / 바이트코드
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment (가상환경)
+venv/
+.venv/
+env/
+
+# Django 관련 (DB 및 환경변수)
+*.sqlite3
+.env
+
+# IDE / Editor 설정
+.vscode/
+.idea/
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db
