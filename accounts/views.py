@@ -45,8 +45,9 @@ class GoogleLoginView(APIView):
                 google_requests.Request(), 
                 settings.GOOGLE_CLIENT_ID
             )
-        except ValueError:
-            # 토큰 만료, 서명 위조 등의 검증 실패
+        except ValueError as e:
+            # print(f"[Google Auth Error] Request ID: {request_id} | Exception: {e}")
+            
             return Response(
                 {
                     "error": {

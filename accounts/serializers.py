@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-class LoginRequestSerializer(serializers.Serializer):
+class GoogleLoginRequestSerializer(serializers.Serializer):
     id_token = serializers.CharField(required=True)
 
 class UserResponseSerializer(serializers.ModelSerializer):
