@@ -5,22 +5,10 @@ from rest_framework import exceptions, status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
+from .errors import ApiError  # noqa: F401  (기존 import 경로 유지: from common.exceptions import ApiError)
 from .middleware import get_request_id
 
 logger = logging.getLogger(__name__)
-
-
-class ApiError(exceptions.APIException):
-    """명세의 에러 code와 message를 그대로 돌려줄 때 씁니다.
-
-    예) raise ApiError(401, 'UNAUTHORIZED', '구글 로그인 정보를 확인할 수 없어요.')
-    """
-
-    def __init__(self, status_code, code, message):
-        self.status_code = status_code
-        self.error_code = code
-        self.message = message
-        super().__init__(detail=message, code=code)
 
 
 # DRF 기본 예외 → 공통 규칙의 (code, message)
