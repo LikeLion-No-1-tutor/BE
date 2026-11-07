@@ -142,9 +142,11 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    # 로그인·토큰 재발급 외에는 모두 인증 필요. 필요 없는 API는 view에서 AllowAny로 엽니다.
+    # 기본: 로그인 + 닉네임 저장 필요 (07번 이후 API).
+    # 로그인·토큰 재발급은 AllowAny, 닉네임 없이 쓰는 03~06번은 IsAuthenticated만 view에서 지정합니다.
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
+        'common.permissions.NicknameRequired',
     ),
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
 }
