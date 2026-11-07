@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
 
     'accounts',
+    'personas',
+    'materials',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -171,8 +173,27 @@ LOGGING = {
     },
     'loggers': {
         'common': {'handlers': ['stdout'], 'level': 'INFO'},
+        'materials': {'handlers': ['stdout'], 'level': 'INFO'},
     },
 }
+
+# AI 서버 (FastAPI). 비어 있으면 AI 호출이 AI_ERROR로 실패합니다.
+AI_SERVER_URL = env('AI_SERVER_URL', default='')
+AI_SERVER_TOKEN = env('AI_SERVER_TOKEN', default='')
+
+# 08. 학습 자료 업로드
+MAX_UPLOAD_MB = env.int('MAX_UPLOAD_MB', default=20)
+# 원본 임시 저장소. 자료 정리가 끝나면 지웁니다.
+# (.env에 빈 값으로 적혀 있어도 기본값을 쓰도록 `or`로 처리)
+TEMP_UPLOAD_DIR = env('TEMP_UPLOAD_DIR', default='') or str(BASE_DIR / 'tmp_uploads')
+# PPT·DOCX → PDF 변환에 쓰는 LibreOffice 실행 파일
+LIBREOFFICE_PATH = env('LIBREOFFICE_PATH', default='') or 'soffice'
+# Django가 업로드를 막기 전 한도: 파일 제한 + 여유 1MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = (MAX_UPLOAD_MB + 1) * 1024 * 1024
+
+# 백그라운드 작업 (common/jobs.py): 같은 프로세스의 스레드 풀
+BACKGROUND_JOB_WORKERS = env.int('BACKGROUND_JOB_WORKERS', default=4)
+BACKGROUND_JOBS_SYNC = False  # 테스트에서만 True
 
 
 # Email

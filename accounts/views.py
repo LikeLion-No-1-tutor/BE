@@ -14,6 +14,8 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from common.exceptions import ApiError
+from materials import storage as material_storage
+from materials.models import Material
 
 from .serializers import GoogleLoginRequestSerializer, MeResponseSerializer, UserResponseSerializer
 
@@ -213,6 +215,11 @@ class MeView(APIView):
     def delete(self, request):
         user = request.user
 
+        # 정리 중이던 자료: 커밋 뒤 임시 저장소의 원본을 지움 (돌고 있던 작업은 자료가 없으면 조용히 끝남)
+        processing_ids = list(
+            Material.objects.filter(user=user, status=Material.Status.PROCESSING).values_list('id', flat=True)
+        )
+
         with transaction.atomic():
             # 다른 기기에서 받은 refresh 토큰까지 모두 블랙리스트에 넣음.
             # OutstandingToken.user는 SET_NULL이라 사용자를 지워도 블랙리스트는 남음.
@@ -223,6 +230,6 @@ class MeView(APIView):
             )
             # 학습 데이터(materials, lessons 등)는 FK CASCADE로 함께 지워짐
             user.delete()
+            transaction.on_commit(lambda: [material_storage.delete(i) for i in processing_ids])
 
-        # TODO(08번): 정리 중이던 자료의 임시 원본 파일 삭제
         return Response(status=status.HTTP_204_NO_CONTENT)
