@@ -1,100 +1,88 @@
-import uuid
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
+from common.exceptions import ApiError
 
 from .serializers import GoogleLoginRequestSerializer, UserResponseSerializer
 
 User = get_user_model()
 
+INVALID_GOOGLE_LOGIN = '구글 로그인 정보를 확인할 수 없어요.'
+
+
+def _unauthorized(message=INVALID_GOOGLE_LOGIN):
+    return ApiError(status.HTTP_401_UNAUTHORIZED, 'UNAUTHORIZED', message)
+
+
 class GoogleLoginView(APIView):
-    permission_classes = []  # 인증 필요 없음
+    """01. 소셜 로그인·회원가입 — POST /api/auth/google"""
+
+    authentication_classes = []  # 만료된 Bearer 헤더가 붙어 와도 로그인은 되게
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        request_id = str(uuid.uuid4())
-        headers = {'X-Request-ID': request_id}
-
-        # 1. 입력값 검증 (id_token 누락 체크)
+        # 1. 입력값 검증
         serializer = GoogleLoginRequestSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(
-                {
-                    "error": {
-                        "code": "VALIDATION_ERROR",
-                        "message": "id_token이 필요해요.",
-                        "request_id": request_id
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-                headers=headers
-            )
+            raise ApiError(status.HTTP_400_BAD_REQUEST, 'VALIDATION_ERROR', 'id_token이 필요해요.')
 
-        token = serializer.validated_data['id_token']
-
-        # 2. 구글 ID 토큰 검증
+        # 2. 구글 ID 토큰 검증 (서명, 발급자, aud = GOOGLE_CLIENT_ID, 만료)
         try:
-            # GOOGLE_CLIENT_ID는 settings.py에 설정해둔 구글 클라이언트 ID입니다.
             id_info = id_token.verify_oauth2_token(
-                token, 
-                google_requests.Request(), 
-                settings.GOOGLE_CLIENT_ID
+                serializer.validated_data['id_token'],
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
             )
-        except ValueError as e:
-            # print(f"[Google Auth Error] Request ID: {request_id} | Exception: {e}")
-            
-            return Response(
-                {
-                    "error": {
-                        "code": "UNAUTHORIZED",
-                        "message": "구글 로그인 정보를 확인할 수 없어요.",
-                        "request_id": request_id
-                    }
-                },
-                status=status.HTTP_401_UNAUTHORIZED,
-                headers=headers
-            )
+        except ValueError:
+            raise _unauthorized()
 
         google_sub = id_info.get('sub')
         email = id_info.get('email')
+        if not google_sub or not email or id_info.get('email_verified') is not True:
+            raise _unauthorized()
 
-        # 3. 유저 조회 또는 생성 (is_new_user 판단)
-        user = User.objects.filter(google_sub=google_sub).first()
-        is_new_user = False
+        # 3. sub로만 사용자를 찾고, 없으면 새로 만듦 (이메일로 기존 계정에 연결하지 않음)
+        user, is_new_user = self._get_or_create_user(google_sub, email)
 
-        if not user:
-            # sub로 찾지 못했으나 이메일이 기존에 존재하는 경우 처리 혹은 생성
-            user = User.objects.filter(email=email).first()
-            if user:
-                user.google_sub = google_sub
-                user.save()
-            else:
-                user = User.objects.create_user(
-                    username=email, # AbstractUser 기본 필드 충돌 방지용
-                    email=email,
-                    google_sub=google_sub
-                )
-                is_new_user = True
+        # 4. last_login_at 갱신
+        user.last_login_at = timezone.now()
+        user.save(update_fields=['last_login_at'])
 
-        # 4. last_login_at 갱신 (auto_now=True 설정 시 save 호출로 자동 갱신)
-        user.save()
-
-        # 5. SimpleJWT 토큰 발급
+        # 5. JWT 발급
         refresh = RefreshToken.for_user(user)
 
-        # 6. 응답 데이터 구성
-        user_data = UserResponseSerializer(user).data
+        return Response(
+            {
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'is_new_user': is_new_user,
+                'user': UserResponseSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
-        response_payload = {
-            "access_token": str(refresh.access_token),
-            "refresh_token": str(refresh),
-            "is_new_user": is_new_user,
-            "user": user_data
-        }
+    @staticmethod
+    def _get_or_create_user(google_sub, email):
+        user = User.objects.filter(google_sub=google_sub).first()
+        if user is not None:
+            return user, False
 
-        return Response(response_payload, status=status.HTTP_200_OK, headers=headers)
+        try:
+            with transaction.atomic():
+                return User.objects.create_user(email=email, google_sub=google_sub), True
+        except IntegrityError:
+            # 같은 sub로 동시에 처음 로그인한 경우: 먼저 만들어진 사용자를 씀
+            user = User.objects.filter(google_sub=google_sub).first()
+            if user is not None:
+                return user, False
+            # 같은 이메일이 다른 구글 계정(sub)으로 이미 가입돼 있음
+            raise _unauthorized('이미 다른 구글 계정으로 가입된 이메일이에요.')
