@@ -19,3 +19,5 @@ env/
 # OS 생성 파일
 .DS_Store
 Thumbs.db
+# 학습 자료 임시 저장소
+tmp_uploads/
