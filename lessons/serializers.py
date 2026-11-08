@@ -150,3 +150,60 @@ def question_asked_data(lesson, hand_raise, question):
         'question': message_data(question, with_reply_to=False),
         'raised_hand_count': raised_hand_count(lesson),
     }
+
+
+def note_data(note, lesson):
+    """정리노트의 응답."""
+    return {
+        'id': note.id,
+        'lesson_id': lesson.id,
+        'persona_name': lesson.persona.name,
+        'content': note.content,
+        'created_at': iso(note.created_at),
+    }
+
+
+def progress_data(lesson, exam_question_count):
+    """진행 상태의 응답. 저장하지 않고 note·exams·reports로 계산한다."""
+    from exams.models import Exam
+
+    from .models import Lesson
+
+    evaluating = lesson.status == Lesson.Status.EVALUATING
+    failed = lesson.status == Lesson.Status.FAILED
+    note = getattr(lesson, 'note', None)
+    report = getattr(lesson, 'report', None)
+    exam = lesson.exams.filter(kind=Exam.Kind.EVALUATION).first()
+
+    if note is not None:
+        note_status = 'done'
+    elif evaluating:
+        note_status = 'running'
+    elif failed:
+        note_status = 'failed'
+    else:
+        note_status = 'pending'
+
+    if note_status != 'done' or exam is None:
+        exam_status = 'pending'
+    else:
+        exam_status = exam.status
+    solved = exam.questions.exclude(response=None).count() if exam is not None else 0
+    total = exam.question_count if exam is not None else exam_question_count
+
+    if report is not None:
+        report_status = 'done'
+    elif exam_status == Exam.Status.COMPLETED and evaluating:
+        report_status = 'running'
+    elif exam_status == Exam.Status.COMPLETED and failed:
+        report_status = 'failed'
+    else:
+        report_status = 'pending'
+
+    return {
+        'lesson_status': lesson.status,
+        'note': {'status': note_status, 'note_id': note.id if note else None},
+        'exam': {'status': exam_status, 'solved': solved, 'total': total},
+        'report': {'status': report_status, 'report_id': report.id if report else None},
+        'error': lesson.error,
+    }

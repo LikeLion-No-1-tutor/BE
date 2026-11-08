@@ -9,6 +9,7 @@ from .models import HandRaise, LessonTerm
 
 ANALYZE_PATH = '/lessons/messages/analyze'  # 용어 판정 + 손 들기
 QUESTION_PATH = '/lessons/questions'  # 손 든 표시의 질문 만들기
+NOTE_PATH = '/lessons/note'  # 정리노트 작성
 
 # 용어 상태는 올라가기만 한다: todo → mentioned → explained
 TERM_RANK = {LessonTerm.Status.TODO: 0, LessonTerm.Status.MENTIONED: 1, LessonTerm.Status.EXPLAINED: 2}
@@ -76,6 +77,23 @@ def question_payload(lesson, hand_raise):
         'messages': [message_payload(m) for m in lesson.messages.all()],
         'reason': hand_raise.reason,
     }
+
+
+def note_payload(lesson):
+    """정리노트 작성 요청. 학생 AI가 배운 대화만으로 정리노트를 쓴다."""
+    return {
+        'title': lesson.material.title,
+        'persona': persona_payload(lesson.persona),
+        'messages': [message_payload(m) for m in lesson.messages.all()],
+    }
+
+
+def parse_note(body):
+    """정리노트 작성 응답의 Markdown."""
+    content = body['content']
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError('content가 비었음')
+    return content.strip()
 
 
 def parse_analyze_result(body):
