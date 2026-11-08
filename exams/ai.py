@@ -100,7 +100,9 @@ def is_choice_correct(question, response):
 
 # 주관식 채점 ------------------------------------------------------------
 
-def grade_payload(questions):
+def grade_payload(questions, responses=None):
+    """responses: {number: 답}. 주지 않으면 저장된 response(평가에서 학생 AI가 낸 답)를 쓴다."""
+    responses = responses or {}
     return {
         'items': [
             {
@@ -108,7 +110,7 @@ def grade_payload(questions):
                 'content': q.content,
                 'correct_answer': q.correct_answer,
                 'explanation': q.explanation,
-                'response': q.response,
+                'response': responses.get(q.number, q.response),
             }
             for q in questions
         ],
