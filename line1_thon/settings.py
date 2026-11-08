@@ -15,6 +15,8 @@ import os
 import environ
 from datetime import timedelta
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -164,6 +166,9 @@ SIMPLE_JWT = {
 
 # 기본값 없음: 빠져 있으면 서버가 시작되지 않게 합니다.
 GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID')
+# 빈 값도 막습니다. 빈 값이면 서버는 켜지는데 구글 로그인만 전부 401이 되어 알아채기 어렵습니다.
+if not GOOGLE_CLIENT_ID.strip():
+    raise ImproperlyConfigured('GOOGLE_CLIENT_ID가 비어 있어요. .env에 구글 웹 클라이언트 ID를 넣어 주세요.')
 
 LOGGING = {
     'version': 1,
