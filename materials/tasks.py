@@ -8,6 +8,7 @@
 
 AI 호출은 실패하면 한 번 다시 시도합니다 (UNREADABLE_MATERIAL은 다시 시도하지 않음).
 작업 중에 사용자가 탈퇴해 자료가 사라지면 조용히 끝냅니다.
+예상하지 못한 예외가 나도 원본은 반드시 지우고, 자료는 failed(AI_ERROR)로 끝냅니다.
 """
 import json
 import logging
@@ -60,14 +61,21 @@ def material_process(material_id, request_id):
         _update(material_id, summary=summary)
 
     except MaterialGone:
-        storage.delete(material_id)
         logger.info('job finished: material deleted', extra={'event': 'job_finished', **log_extra})
         return
     except AiError as ai_error:
         error = ai_error
+    except Exception as unexpected:
+        # 코드 버그, 파일 읽기 실패, DB 오류 등. 자료가 processing에 멈추지 않게 실패로 끝냄
+        logger.exception(
+            'job crashed',
+            extra={'event': 'exception', 'step': step, 'exception_type': type(unexpected).__name__, **log_extra},
+        )
+        error = AiError('AI_ERROR', '자료 정리 중 예상하지 못한 오류가 났어요.', 'UNEXPECTED')
+    finally:
+        # 4. 원본 삭제 (성공·실패·탈퇴 상관없이 항상)
+        storage.delete(material_id)
 
-    # 4. 원본 삭제 (항상)
-    storage.delete(material_id)
     now = timezone.now()
     duration_ms = int((time.monotonic() - started) * 1000)
 
