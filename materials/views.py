@@ -85,3 +85,50 @@ class MaterialCreateView(APIView):
             {'id': material.id, 'title': material.title, 'status': material.status},
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+def _step(done, running):
+    if done:
+        return 'done'
+    return 'running' if running else 'pending'
+
+
+class MaterialDetailView(APIView):
+    """09. 자료 정리 상태 — GET /api/materials/{material_id}
+
+    자료 제출 화면이 1~2초마다 불러 진행 목록을 그립니다.
+    steps는 저장하지 않고 컬럼으로 계산합니다. 용어 정의와 요약정리는 내려주지 않습니다.
+    """
+
+    def get(self, request, material_id):
+        material = Material.objects.filter(pk=material_id).first()
+        if material is None:
+            raise ApiError(status.HTTP_404_NOT_FOUND, 'NOT_FOUND', '자료를 찾을 수 없어요.')
+        if material.user_id != request.user.id:
+            raise ApiError(status.HTTP_403_FORBIDDEN, 'FORBIDDEN', '접근할 수 없는 데이터예요.')
+
+        processing = material.status == Material.Status.PROCESSING
+        term_count = material.terms.count()
+        terms_done = term_count > 0
+        summary_done = bool(material.summary)
+        deleted = material.original_deleted_at is not None
+
+        return Response(
+            {
+                'id': material.id,
+                'title': material.title,
+                'source_type': material.source_type,
+                'file_name': material.file_name,
+                'status': material.status,
+                'steps': {
+                    # 정리를 시작하면 바로 done (변환은 짧아 따로 보여 주지 않음)
+                    'read': 'done',
+                    'terms': _step(terms_done, processing),
+                    'summary': _step(summary_done, terms_done and processing),
+                    'original_deleted': _step(deleted, summary_done and not deleted),
+                },
+                'term_count': term_count,
+                'error': material.error,
+            },
+            status=status.HTTP_200_OK,
+        )
