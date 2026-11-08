@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from common import ai_client, jobs
 from common.errors import ApiError
+from common.pagination import PagePagination
 from materials.models import Material
 from personas.models import Persona
 
@@ -15,10 +16,12 @@ from .finish import run_lesson_finish
 from .greetings import greeting_for
 from .models import HandRaise, Lesson, LessonTerm, Message, Note
 from .serializers import (
+    LessonListQuery,
     LessonStartRequest,
     MessagePageQuery,
     MessageSendRequest,
     lesson_detail_data,
+    lesson_list_item,
     lesson_messages_data,
     lesson_start_data,
     message_sent_data,
@@ -74,7 +77,23 @@ def call_ai(request, path, payload, parse):
 
 
 class LessonListView(APIView):
-    """POST /api/lessons — 수업 시작 (권한은 기본값: 로그인 + 닉네임)"""
+    """/api/lessons  GET: 학습 목록, POST: 수업 시작 (권한은 기본값: 로그인 + 닉네임)"""
+
+    def get(self, request):
+        query = LessonListQuery(data=request.query_params)
+        if not query.is_valid():
+            raise ApiError(400, 'VALIDATION_ERROR', 'status는 teaching 또는 completed여야 해요.')
+        lessons = (
+            Lesson.objects.filter(user=request.user)
+            .select_related('material', 'persona', 'report')
+            .prefetch_related('exams')
+            .order_by('-started_at', '-id')  # 최신순
+        )
+        if 'status' in query.validated_data:
+            lessons = lessons.filter(status=query.validated_data['status'])
+        paginator = PagePagination()
+        page = paginator.paginate_queryset(lessons, request, view=self)
+        return paginator.get_paginated_response([lesson_list_item(lesson) for lesson in page])
 
     def post(self, request):
         body = LessonStartRequest(data=request.data)

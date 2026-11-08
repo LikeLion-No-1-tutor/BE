@@ -25,6 +25,12 @@ class MessageSendRequest(serializers.Serializer):
     reply_to_id = serializers.IntegerField(required=False, allow_null=True)
 
 
+class LessonListQuery(serializers.Serializer):
+    """학습 목록의 ?status=teaching|completed. page·size는 PagePagination이 본다."""
+
+    status = serializers.ChoiceField(choices=['teaching', 'completed'], required=False)
+
+
 class MessagePageQuery(serializers.Serializer):
     """수업 대화 조회의 ?before=<message_id>&limit=50"""
 
@@ -206,4 +212,20 @@ def progress_data(lesson, exam_question_count):
         'exam': {'status': exam_status, 'solved': solved, 'total': total},
         'report': {'status': report_status, 'report_id': report.id if report else None},
         'error': lesson.error,
+    }
+
+
+def lesson_list_item(lesson):
+    """학습 목록의 한 줄. exams는 prefetch, material·persona·report는 select_related로 가져온 수업."""
+    from exams.scores import evaluation_score, latest_score
+
+    return {
+        'id': lesson.id,
+        'title': lesson.material.title,
+        'persona_name': lesson.persona.name,
+        'status': lesson.status,
+        'started_at': iso(lesson.started_at),
+        'score': evaluation_score(lesson),
+        'latest_score': latest_score(lesson),
+        'report_id': _related_id(lesson, 'report'),
     }
