@@ -6,7 +6,7 @@
 4. 원본 삭제 (성공·실패 상관없이 항상) → original_deleted_at
 5. status: ready, processed_at. 실패하면 status: failed, error
 
-AI 호출은 실패하면 한 번 다시 시도합니다 (UNREADABLE_MATERIAL은 다시 시도하지 않음).
+AI 호출은 ai_client가 실패하면 한 번 다시 부릅니다 (UNREADABLE_MATERIAL은 다시 부르지 않음).
 작업 중에 사용자가 탈퇴해 자료가 사라지면 조용히 끝냅니다.
 예상하지 못한 예외가 나도 원본은 반드시 지우고, 자료는 failed(AI_ERROR)로 끝냅니다.
 """
@@ -53,11 +53,11 @@ def material_process(material_id, request_id):
             path = convert_to_pdf(path)
 
         step = 'terms'
-        terms = _with_retry(lambda: _request_terms(material, path, request_id))
+        terms = _request_terms(material, path, request_id)
         _save_terms(material_id, terms)
 
         step = 'summary'
-        summary = _with_retry(lambda: _request_summary(material, path, terms, request_id))
+        summary = _request_summary(material, path, terms, request_id)
         _update(material_id, summary=summary)
 
     except MaterialGone:
@@ -127,16 +127,6 @@ def _save_terms(material_id, terms):
         raise MaterialGone()
 
 
-def _with_retry(func):
-    try:
-        return func()
-    except AiError as error:
-        if not error.retryable:
-            raise
-        logger.warning('ai call retry', extra={'event': 'ai_retry', 'error_code': error.original_code})
-        return func()
-
-
 def _multipart(material, path):
     """AI-1·AI-2 공통 필드: title + file 또는 text"""
     data = {'title': material.title}
@@ -152,23 +142,26 @@ def _multipart(material, path):
     return data, (file_name, content_type)
 
 
-def _post_material(path_on_ai, material, path, request_id, extra_data=None):
+def _post_material(path_on_ai, material, path, request_id, parse, extra_data=None):
     data, file_info = _multipart(material, path)
     data.update(extra_data or {})
     user_id = material.user_id
     if file_info is None:
-        return ai_client.call(path_on_ai, request_id=request_id, user_id=user_id, data=data)
+        return ai_client.call(path_on_ai, request_id=request_id, user_id=user_id, data=data, parse=parse)
     file_name, content_type = file_info
     with open(path, 'rb') as fh:
         return ai_client.call(
             path_on_ai, request_id=request_id, user_id=user_id,
-            data=data, files={'file': (file_name, fh, content_type)},
+            data=data, files={'file': (file_name, fh, content_type)}, parse=parse,
         )
 
 
 def _request_terms(material, path, request_id):
     """AI-1 용어 체크리스트 생성"""
-    body = _post_material('/materials/terms', material, path, request_id)
+    return _post_material('/materials/terms', material, path, request_id, _parse_terms)
+
+
+def _parse_terms(body):
     terms = body.get('terms')
     valid = [
         {'name': str(t['name']).strip()[:100], 'definition': str(t['definition']).strip()}
@@ -176,17 +169,20 @@ def _request_terms(material, path, request_id):
         if isinstance(t, dict) and str(t.get('name', '')).strip() and str(t.get('definition', '')).strip()
     ]
     if not valid:
-        raise AiError('AI_ERROR', '용어 체크리스트가 비어 있어요.', 'INVALID_RESPONSE')
+        raise ValueError('용어 체크리스트가 비어 있어요.')
     return valid
 
 
 def _request_summary(material, path, terms, request_id):
     """AI-2 요약정리 생성"""
-    body = _post_material(
-        '/materials/summary', material, path, request_id,
+    return _post_material(
+        '/materials/summary', material, path, request_id, _parse_summary,
         extra_data={'terms': json.dumps(terms, ensure_ascii=False)},
     )
+
+
+def _parse_summary(body):
     summary = body.get('summary')
     if not isinstance(summary, str) or not summary.strip():
-        raise AiError('AI_ERROR', '요약정리가 비어 있어요.', 'INVALID_RESPONSE')
+        raise ValueError('요약정리가 비어 있어요.')
     return summary
