@@ -57,6 +57,8 @@ INSTALLED_APPS = [
     'accounts',
     'personas',
     'materials',
+    'lessons',
+    'exams',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'

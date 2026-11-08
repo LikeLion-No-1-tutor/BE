@@ -20,6 +20,7 @@ urlpatterns = [
     path('', include('accounts.urls')),
     path('', include('personas.urls')),
     path('', include('materials.urls')),
+    path('', include('lessons.urls')),
 ]
 
 # DEBUG=False일 때 DRF 밖의 404·500도 공통 에러 형식으로
