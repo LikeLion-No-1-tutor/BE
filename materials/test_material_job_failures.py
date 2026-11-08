@@ -15,7 +15,7 @@ from rest_framework.test import APITestCase
 from materials import storage
 from materials import tasks as material_tasks
 from materials.models import Material
-from materials.tests import USAGE, FakeAiServer, FakeResponse, ok_summary, ok_terms
+from materials.tests import IMMEDIATE_TASKS, USAGE, FakeAiServer, FakeResponse, ok_summary, ok_terms
 
 User = get_user_model()
 
@@ -30,7 +30,7 @@ class NotJsonResponse(FakeResponse):
         raise ValueError('not json')
 
 
-@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', BACKGROUND_JOBS_SYNC=True)
+@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', TASKS=IMMEDIATE_TASKS)
 class MaterialJobFailureTests(APITestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

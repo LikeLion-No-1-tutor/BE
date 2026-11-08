@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'django_tasks_db',
 
     'accounts',
     'personas',
@@ -196,9 +197,13 @@ LIBREOFFICE_PATH = env('LIBREOFFICE_PATH', default='') or 'soffice'
 # Django가 업로드를 막기 전 한도: 파일 제한 + 여유 1MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = (MAX_UPLOAD_MB + 1) * 1024 * 1024
 
-# 백그라운드 작업 (common/jobs.py): 같은 프로세스의 스레드 풀
-BACKGROUND_JOB_WORKERS = env.int('BACKGROUND_JOB_WORKERS', default=4)
-BACKGROUND_JOBS_SYNC = False  # 테스트에서만 True
+# 백그라운드 작업 (common/jobs.py): 할 일 목록은 DB에, 실행은 따로 도는 worker가 합니다.
+# worker 실행: python manage.py db_worker
+TASKS = {
+    'default': {
+        'BACKEND': 'django_tasks_db.DatabaseBackend',
+    },
+}
 
 
 # Email
