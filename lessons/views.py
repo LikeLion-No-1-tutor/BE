@@ -1,17 +1,19 @@
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common import ai_client
+from common import ai_client, jobs
 from common.errors import ApiError
 from materials.models import Material
 from personas.models import Persona
 
 from . import ai
+from .finish import run_lesson_finish
 from .greetings import greeting_for
-from .models import HandRaise, Lesson, LessonTerm, Message
+from .models import HandRaise, Lesson, LessonTerm, Message, Note
 from .serializers import (
     LessonStartRequest,
     MessagePageQuery,
@@ -20,6 +22,8 @@ from .serializers import (
     lesson_messages_data,
     lesson_start_data,
     message_sent_data,
+    note_data,
+    progress_data,
     question_asked_data,
 )
 
@@ -225,3 +229,41 @@ class HandRaiseAskView(APIView):
             hand_raise.save(update_fields=['status', 'question_message', 'asked_at'])
 
         return Response(question_asked_data(lesson, hand_raise, question), status=status.HTTP_201_CREATED)
+
+
+class LessonEndView(APIView):
+    """POST /api/lessons/{lesson_id}/end: 수업 종료
+
+    상태를 evaluating으로 바꾸고, 커밋한 뒤 백그라운드 작업 lesson_finish를 등록한다.
+    남아 있는 raised 손 든 표시는 그대로 둔다 (질문하지 않은 것으로 기록).
+    """
+
+    def post(self, request, lesson_id):
+        lesson = get_own_lesson(request.user, lesson_id)
+        ensure_teaching(lesson)
+        with transaction.atomic():
+            lesson = lock_teaching_lesson(lesson.id)  # 종료 버튼을 두 번 눌러도 한 번만
+            lesson.status = Lesson.Status.EVALUATING
+            lesson.ended_at = timezone.now()
+            lesson.save(update_fields=['status', 'ended_at'])
+            jobs.enqueue(run_lesson_finish, lesson.id, request.request_id)
+        return Response({'id': lesson.id, 'status': lesson.status}, status=status.HTTP_202_ACCEPTED)
+
+
+class LessonProgressView(APIView):
+    """GET /api/lessons/{lesson_id}/progress: 진행 상태"""
+
+    def get(self, request, lesson_id):
+        lesson = get_own_lesson(request.user, lesson_id)
+        return Response(progress_data(lesson, settings.EXAM_QUESTION_COUNT))
+
+
+class LessonNoteView(APIView):
+    """GET /api/lessons/{lesson_id}/note: 정리노트"""
+
+    def get(self, request, lesson_id):
+        lesson = get_own_lesson(request.user, lesson_id)
+        note = Note.objects.filter(lesson=lesson).first()
+        if note is None:
+            raise ApiError(409, 'NOTE_NOT_READY', '정리노트가 아직 준비되지 않았어요.')
+        return Response(note_data(note, lesson))
