@@ -21,6 +21,9 @@ from materials.models import Material, Term
 
 User = get_user_model()
 
+# 테스트에서는 worker 없이 커밋 직후 바로 실행
+IMMEDIATE_TASKS = {'default': {'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend'}}
+
 TERMS = [
     {'name': '분산 표현', 'definition': '단어를 실수 벡터로 나타내는 방법.'},
     {'name': 'CBOW', 'definition': '주변 단어로 가운데 단어를 맞히는 모델.'},
@@ -73,7 +76,7 @@ class FakeAiServer:
         return [c['path'] for c in self.calls]
 
 
-@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', BACKGROUND_JOBS_SYNC=True)
+@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', TASKS=IMMEDIATE_TASKS)
 class MaterialUploadTests(APITestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
