@@ -18,6 +18,13 @@ class LessonStartRequest(serializers.Serializer):
     persona_id = serializers.IntegerField()
 
 
+class MessageSendRequest(serializers.Serializer):
+    """설명·답변 보내기 요청. content는 앞뒤 공백을 지운 뒤 1~3000자."""
+
+    content = serializers.CharField(max_length=3000)
+    reply_to_id = serializers.IntegerField(required=False, allow_null=True)
+
+
 class MessagePageQuery(serializers.Serializer):
     """수업 대화 조회의 ?before=<message_id>&limit=50"""
 
@@ -81,20 +88,15 @@ def _related_id(lesson, name):
 
 def lesson_detail_data(lesson):
     """수업 정보 + 용어 체크리스트의 응답."""
-    from .models import HandRaise, LessonTerm
-
-    lesson_terms = list(lesson.lesson_terms.select_related('term'))
+    lesson_terms = lesson.lesson_terms.select_related('term')
     return {
         'id': lesson.id,
         'status': lesson.status,
         'material': material_brief(lesson.material),
         'persona': persona_brief(lesson.persona),
         'terms': [lesson_term_data(lesson_term) for lesson_term in lesson_terms],
-        'term_summary': {
-            'explained': sum(1 for t in lesson_terms if t.status == LessonTerm.Status.EXPLAINED),
-            'total': len(lesson_terms),
-        },
-        'raised_hand_count': lesson.hand_raises.filter(status=HandRaise.Status.RAISED).count(),
+        'term_summary': term_summary(lesson),
+        'raised_hand_count': raised_hand_count(lesson),
         'note_id': _related_id(lesson, 'note'),
         'report_id': _related_id(lesson, 'report'),
         'started_at': iso(lesson.started_at),
@@ -107,4 +109,44 @@ def lesson_messages_data(messages, hand_raises):
     return {
         'messages': [message_data(message) for message in messages],
         'hand_raises': [hand_raise_data(hand_raise) for hand_raise in hand_raises],
+    }
+
+
+def term_summary(lesson):
+    from .models import LessonTerm
+
+    statuses = list(lesson.lesson_terms.values_list('status', flat=True))
+    return {
+        'explained': sum(1 for value in statuses if value == LessonTerm.Status.EXPLAINED),
+        'total': len(statuses),
+    }
+
+
+def raised_hand_count(lesson):
+    from .models import HandRaise
+
+    return lesson.hand_raises.filter(status=HandRaise.Status.RAISED).count()
+
+
+def message_sent_data(lesson, message, changed_terms, new_hand_raise):
+    """설명·답변 보내기의 응답. changed_terms는 이번 메시지로 상태가 바뀐 LessonTerm 목록."""
+    return {
+        'message': message_data(message),
+        'term_updates': [lesson_term_data(lesson_term) for lesson_term in changed_terms],
+        'term_summary': term_summary(lesson),
+        'new_hand_raise': None if new_hand_raise is None else {
+            'id': new_hand_raise.id,
+            'after_message_id': new_hand_raise.after_message_id,
+            'status': new_hand_raise.status,
+        },
+        'raised_hand_count': raised_hand_count(lesson),
+    }
+
+
+def question_asked_data(lesson, hand_raise, question):
+    """질문 받기의 응답."""
+    return {
+        'hand_raise': hand_raise_data(hand_raise),
+        'question': message_data(question, with_reply_to=False),
+        'raised_hand_count': raised_hand_count(lesson),
     }
