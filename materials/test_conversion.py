@@ -63,7 +63,11 @@ class ConvertCommandTests(SimpleTestCase):
         self.assertNotIn(' ', args[1])
 
 
-@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', BACKGROUND_JOBS_SYNC=True)
+# 작업을 커밋 직후 바로 실행 (스레드 풀이든 DB 큐든 같은 테스트로)
+@override_settings(
+    AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', BACKGROUND_JOBS_SYNC=True,
+    TASKS={'default': {'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend'}},
+)
 class ConvertCleanupTests(APITestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
