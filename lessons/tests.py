@@ -178,3 +178,170 @@ class LessonModelTests(TestCase):
             with self.subTest(model=model.__name__):
                 self.assertFalse(model.objects.exists())
         self.assertEqual(Persona.objects.count(), 3)
+
+
+class LessonFixture(TestCase):
+    """수업을 하나 시작해 둔 상태. 수업 정보·수업 대화 조회 테스트가 같이 쓴다."""
+
+    def setUp(self):
+        self.user = make_user()
+        self.client = client_for(self.user)
+        material = make_ready_material(self.user, title='word2vec', terms=['분산 표현', '원핫 표현', 'CBOW'])
+        persona = Persona.objects.get(code='minjun')
+        body = self.client.post(URL, {'material_id': material.id, 'persona_id': persona.id}, format='json').json()
+        self.lesson = Lesson.objects.get(pk=body['id'])
+        self.greeting = self.lesson.messages.get()
+
+    def say(self, content, sender='teacher', kind='explanation', reply_to=None):
+        return Message.objects.create(lesson=self.lesson, sender=sender, kind=kind, content=content,
+                                      reply_to=reply_to)
+
+    def raise_hand(self, after_message, reason='내부 메모: 이게 왜 그런지 궁금함'):
+        return HandRaise.objects.create(lesson=self.lesson, after_message=after_message, reason=reason)
+
+    def set_term(self, name, status):
+        LessonTerm.objects.filter(lesson=self.lesson, term__name=name).update(status=status)
+
+
+class LessonDetailTests(LessonFixture):
+    """수업 정보 + 용어 체크리스트 GET /api/lessons/{lesson_id}"""
+
+    def get(self, lesson_id=None, client=None):
+        return (client or self.client).get(f'{URL}/{lesson_id or self.lesson.id}')
+
+    def test_new_lesson(self):
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['id'], self.lesson.id)
+        self.assertEqual(body['status'], 'teaching')
+        self.assertEqual(body['material']['title'], 'word2vec')
+        self.assertEqual(body['persona']['name'], '민준')
+        self.assertEqual([t['status'] for t in body['terms']], ['todo', 'todo', 'todo'])
+        self.assertEqual(body['term_summary'], {'explained': 0, 'total': 3})
+        self.assertEqual(body['raised_hand_count'], 0)
+        self.assertIsNone(body['note_id'])
+        self.assertIsNone(body['report_id'])
+        self.assertTrue(body['started_at'].endswith('+09:00'))
+        self.assertIsNone(body['ended_at'])
+
+    def test_term_status_and_summary(self):
+        self.set_term('분산 표현', 'explained')
+        self.set_term('원핫 표현', 'mentioned')
+
+        body = self.get().json()
+
+        self.assertEqual([(t['name'], t['status']) for t in body['terms']],
+                         [('분산 표현', 'explained'), ('원핫 표현', 'mentioned'), ('CBOW', 'todo')])
+        self.assertEqual(body['term_summary'], {'explained': 1, 'total': 3})
+
+    def test_raised_hand_count_counts_only_raised(self):
+        explanation = self.say('word2vec은 ...')
+        self.raise_hand(explanation)
+        self.raise_hand(explanation)
+        asked = self.raise_hand(explanation)
+        asked.status = HandRaise.Status.ASKED
+        asked.save()
+
+        self.assertEqual(self.get().json()['raised_hand_count'], 2)
+
+    def test_note_and_report_ids(self):
+        note = Note.objects.create(lesson=self.lesson, content='# 노트')
+        report = Report.objects.create(lesson=self.lesson, score=60, strengths=[], review_recommendations=[])
+
+        body = self.get().json()
+
+        self.assertEqual((body['note_id'], body['report_id']), (note.id, report.id))
+
+    def test_finished_lesson_is_readable(self):
+        Lesson.objects.filter(pk=self.lesson.pk).update(status='completed')
+        self.assertEqual(self.get().json()['status'], 'completed')
+
+    def test_response_hides_definitions(self):
+        self.assertNotIn('의 정의', self.get().content.decode())
+
+    def test_errors(self):
+        other = make_user(email='other@gmail.com')
+        assert_error(self, self.get(lesson_id=999999), 404, 'NOT_FOUND')
+        assert_error(self, self.get(client=client_for(other)), 403, 'FORBIDDEN')
+        assert_error(self, self.get(client=APIClient()), 401, 'UNAUTHORIZED')
+        assert_error(self, self.get(client=client_for(make_user(email='n@gmail.com', nickname=None))),
+                     409, 'NICKNAME_REQUIRED')
+
+
+class LessonMessagesTests(LessonFixture):
+    """수업 대화 + 손 든 표시 GET /api/lessons/{lesson_id}/messages"""
+
+    def get(self, query='', lesson_id=None, client=None):
+        return (client or self.client).get(f'{URL}/{lesson_id or self.lesson.id}/messages{query}')
+
+    def test_messages_in_time_order(self):
+        explanation = self.say('word2vec은 단어를 벡터로 ...')
+        question = self.say('단어 벡터는 어디서 나와요?', sender='student', kind='question')
+        answer = self.say('입력층 가중치의 각 행이에요.', kind='answer', reply_to=question)
+
+        body = self.get().json()
+
+        self.assertEqual([m['id'] for m in body['messages']],
+                         [self.greeting.id, explanation.id, question.id, answer.id])
+        self.assertEqual(body['messages'][3], {
+            'id': answer.id, 'sender': 'teacher', 'kind': 'answer', 'content': '입력층 가중치의 각 행이에요.',
+            'reply_to_id': question.id, 'created_at': body['messages'][3]['created_at'],
+        })
+        self.assertTrue(body['messages'][3]['created_at'].endswith('+09:00'))
+
+    def test_hand_raises_without_reason(self):
+        explanation = self.say('word2vec은 ...')
+        raised = self.raise_hand(explanation)
+        question = self.say('질문', sender='student', kind='question')
+        asked = self.raise_hand(explanation)
+        asked.status, asked.question_message = HandRaise.Status.ASKED, question
+        asked.save()
+
+        response = self.get()
+
+        self.assertEqual(response.json()['hand_raises'], [
+            {'id': raised.id, 'after_message_id': explanation.id, 'status': 'raised', 'question_message_id': None},
+            {'id': asked.id, 'after_message_id': explanation.id, 'status': 'asked',
+             'question_message_id': question.id},
+        ])
+        self.assertNotIn('내부 메모', response.content.decode())
+
+    def test_before_and_limit(self):
+        said = [self.say(f'설명 {i}') for i in range(5)]  # 첫 인사 다음에 5개
+
+        latest_two = self.get('?limit=2').json()['messages']
+        self.assertEqual([m['id'] for m in latest_two], [said[3].id, said[4].id])
+
+        older = self.get(f'?before={said[3].id}&limit=2').json()['messages']
+        self.assertEqual([m['id'] for m in older], [said[1].id, said[2].id])
+
+        oldest = self.get(f'?before={said[1].id}&limit=50').json()['messages']
+        self.assertEqual([m['id'] for m in oldest], [self.greeting.id, said[0].id])
+
+    def test_hand_raises_follow_returned_messages(self):
+        old = self.say('예전 설명')
+        new = self.say('최근 설명')
+        self.raise_hand(old)
+        recent_hand = self.raise_hand(new)
+
+        body = self.get('?limit=1').json()
+
+        self.assertEqual([m['id'] for m in body['messages']], [new.id])
+        self.assertEqual([h['id'] for h in body['hand_raises']], [recent_hand.id])
+
+    def test_limit_is_capped(self):
+        self.assertEqual(self.get('?limit=100000').status_code, 200)
+
+    def test_invalid_query_is_400(self):
+        for query in ['?before=abc', '?limit=abc', '?limit=0', '?before=-1', '?limit=1.5']:
+            with self.subTest(query=query):
+                response = self.get(query)
+                assert_error(self, response, 400, 'VALIDATION_ERROR')
+                self.assertEqual(response.json()['error']['message'], 'before와 limit은 숫자여야 해요.')
+
+    def test_errors(self):
+        assert_error(self, self.get(lesson_id=999999), 404, 'NOT_FOUND')
+        assert_error(self, self.get(client=client_for(make_user(email='other@gmail.com'))), 403, 'FORBIDDEN')
+        assert_error(self, self.get(client=APIClient()), 401, 'UNAUTHORIZED')
