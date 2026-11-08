@@ -13,7 +13,7 @@ from rest_framework.test import APITestCase
 from materials import storage
 from materials.conversion import PROFILE_DIR_NAME, convert_to_pdf
 from materials.models import Material
-from materials.tests import FakeAiServer
+from materials.tests import IMMEDIATE_TASKS, FakeAiServer
 
 User = get_user_model()
 
@@ -63,7 +63,7 @@ class ConvertCommandTests(SimpleTestCase):
         self.assertNotIn(' ', args[1])
 
 
-@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', BACKGROUND_JOBS_SYNC=True)
+@override_settings(AI_SERVER_URL='http://ai.test', AI_SERVER_TOKEN='internal-token', TASKS=IMMEDIATE_TASKS)
 class ConvertCleanupTests(APITestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
