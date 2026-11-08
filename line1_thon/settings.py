@@ -92,6 +92,8 @@ WSGI_APPLICATION = 'line1_thon.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+from .db_ssl import database_ssl_options  # noqa: E402
+
 DATABASES = {
     'default': {
         'ENGINE': env('DB_ENGINE'),
@@ -100,6 +102,12 @@ DATABASES = {
         'PASSWORD': env('DB_PASSWORD'),
         'HOST': env('DB_HOST'),
         'PORT': env('DB_PORT'),
+        # 운영: 비밀번호 대신 클라이언트 인증서 (DB_SSL_*). 로컬은 비워 두면 SSL 없이
+        'OPTIONS': database_ssl_options(
+            env('DB_SSL_CA', default=''),
+            env('DB_SSL_CERT', default=''),
+            env('DB_SSL_KEY', default=''),
+        ),
     }
 }
 
