@@ -1,9 +1,23 @@
 """성장보고서 API의 응답 모양. 놓친 개념·점수 비교는 저장하지 않고 여기서 계산한다."""
+from rest_framework import serializers
+
 from lessons.models import LessonTerm
 from lessons.serializers import iso
 
 from .models import Exam
 from .scores import comparison, latest_score, retest_count, score_history
+
+
+class RetestStartRequest(serializers.Serializer):
+    """재시험 출제 요청. focus를 빼면 missed_terms."""
+
+    focus = serializers.ChoiceField(choices=['missed_terms', 'all'], default='missed_terms')
+
+
+class AnswerRequest(serializers.Serializer):
+    """문제 풀이 요청. 앞뒤 공백을 지운 뒤 비어 있으면 안 됨."""
+
+    response = serializers.CharField()
 
 
 def report_list_item(report):
@@ -73,4 +87,43 @@ def report_detail_data(report):
         'review_recommendations': report.review_recommendations,
         'created_at': iso(report.created_at),
         'updated_at': iso(report.updated_at),
+    }
+
+
+def retest_data(exam, report_id):
+    """재시험 문제·상태. 정답·해설은 답을 낸 문제에만 넣는다."""
+    questions = []
+    for question in exam.questions.all():
+        item = {
+            'number': question.number,
+            'question_type': question.question_type,
+            'content': question.content,
+            'choices': question.choices,
+            'answered': question.response is not None,
+        }
+        if item['answered']:
+            item.update({
+                'response': question.response,
+                'is_correct': question.is_correct,
+                'correct_answer': question.correct_answer,
+                'explanation': question.explanation,
+            })
+        questions.append(item)
+    return {
+        'id': exam.id,
+        'report_id': report_id,
+        'status': exam.status,
+        'total': exam.question_count,
+        'error': exam.error,
+        'questions': questions,
+    }
+
+
+def answer_result_data(question):
+    """문제 풀이 및 채점의 응답."""
+    return {
+        'number': question.number,
+        'is_correct': question.is_correct,
+        'correct_answer': question.correct_answer,
+        'explanation': question.explanation,
     }
