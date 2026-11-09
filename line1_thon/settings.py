@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'corsheaders',
     'django_tasks_db',
 
     'accounts',
@@ -65,6 +66,7 @@ AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'common.middleware.RequestIDMiddleware',  # 맨 앞: 모든 응답에 X-Request-ID
+    'corsheaders.middleware.CorsMiddleware',  # CommonMiddleware보다 앞. 사전 요청(OPTIONS)에 여기서 답함
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -200,6 +202,11 @@ LOGGING = {
 # AI 서버 (FastAPI). 비어 있으면 AI 호출이 AI_ERROR로 실패합니다.
 AI_SERVER_URL = env('AI_SERVER_URL', default='')
 AI_SERVER_TOKEN = env('AI_SERVER_TOKEN', default='')
+
+# 백엔드와 다른 주소에서 운영하는 프론트엔드. 쉼표로 구분합니다. 예) https://app.example.com,http://localhost:3000
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+# 프론트엔드가 문제를 알릴 때 요청 ID를 읽을 수 있게 합니다.
+CORS_EXPOSE_HEADERS = ['X-Request-ID']
 
 # 08. 학습 자료 업로드
 MAX_UPLOAD_MB = env.int('MAX_UPLOAD_MB', default=20)
