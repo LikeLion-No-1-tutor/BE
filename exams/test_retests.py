@@ -153,6 +153,21 @@ class RetestGenerateTests(RetestFixture):
         # 이 수업에서 이미 낸 문제는 빼 달라고
         self.assertEqual(payload['exclude_questions'], ['Q1', 'Q2'])
 
+    def test_exclude_questions_keeps_latest_200(self):
+        self.ai.return_value = http(200, generated(self.term_ids))
+        older = Exam.objects.create(lesson=self.lesson, kind='retest', status='completed', question_count=250)
+        ExamQuestion.objects.bulk_create(
+            ExamQuestion(exam=older, number=n, question_type='short_answer', content=f'older-{n}',
+                         correct_answer='!', explanation='.')
+            for n in range(1, 251)
+        )
+
+        self.run_job(self.make_generating(), focus='all')
+
+        excluded = self.ai_payload()['exclude_questions']
+        self.assertEqual(len(excluded), 200)
+        self.assertEqual((excluded[0], excluded[-1]), ('older-51', 'older-250'))
+
     def test_payload_all(self):
         self.ai.return_value = http(200, generated(self.term_ids))
         self.run_job(self.make_generating(), focus='all')
@@ -284,7 +299,7 @@ class RetestAnswerTests(RetestFixture):
         self.assertIsNone(self.saved(2).response)
 
     def test_invalid_responses_are_400(self):
-        for number, value in [(1, ''), (1, '   '), (1, '3'), (1, '-1'), (1, '가'), (2, ''), (2, None)]:
+        for number, value in [(1, ''), (1, '   '), (1, '3'), (1, '-1'), (1, '가'), (2, ''), (2, None), (2, '가' * 3001)]:
             with self.subTest(number=number, value=value):
                 assert_error(self, self.answer(number, value), 400, 'VALIDATION_ERROR')
         self.ai.assert_not_called()

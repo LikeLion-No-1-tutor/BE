@@ -219,6 +219,8 @@ CORS_EXPOSE_HEADERS = ['X-Request-ID']
 
 # 08. 학습 자료 업로드
 MAX_UPLOAD_MB = env.int('MAX_UPLOAD_MB', default=20)
+# 이미지는 AI 서버가 5MB까지만 받습니다.
+MAX_IMAGE_MB = env.int('MAX_IMAGE_MB', default=5)
 # 원본 임시 저장소. 자료 정리가 끝나면 지웁니다.
 # (.env에 빈 값으로 적혀 있어도 기본값을 쓰도록 `or`로 처리)
 TEMP_UPLOAD_DIR = env('TEMP_UPLOAD_DIR', default='') or str(BASE_DIR / 'tmp_uploads')

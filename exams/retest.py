@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 JOB = 'retest_generate'
 FOCUS_MISSED_TERMS = 'missed_terms'
 FOCUS_ALL = 'all'
+MAX_EXCLUDE_QUESTIONS = 200  # AI 서버가 받는 이전 문제 수의 상한
 
 
 def run_retest_generate(exam_id, focus, request_id):
@@ -64,9 +65,8 @@ def _generate(exam, focus, request_id):
             lesson.lesson_terms.exclude(status=LessonTerm.Status.EXPLAINED).values_list('term_id', flat=True)
         )
     # 이 수업에서 이미 낸 문제는 또 내지 않게
-    exclude_questions = list(
-        ExamQuestion.objects.filter(exam__lesson=lesson).order_by('exam_id', 'number').values_list('content', flat=True)
-    )
+    latest = ExamQuestion.objects.filter(exam__lesson=lesson).order_by('-exam_id', '-number')
+    exclude_questions = list(latest.values_list('content', flat=True)[:MAX_EXCLUDE_QUESTIONS])[::-1]
     payload = ai.generate_payload(
         material, Exam.Kind.RETEST, exam.question_count, settings.EXAM_QUESTION_TYPES,
         focus_term_ids=focus_term_ids, exclude_questions=exclude_questions,
