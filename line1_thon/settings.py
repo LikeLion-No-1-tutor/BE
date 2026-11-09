@@ -12,10 +12,13 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 import environ
 from datetime import timedelta
 
 from django.core.exceptions import ImproperlyConfigured
+
+from common.json_log import service_name
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -197,14 +200,22 @@ if not GOOGLE_CLIENT_ID.strip():
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'stdout': {'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout'},
+    'formatters': {
+        'json': {
+            '()': 'common.json_log.JsonFormatter',
+            'service': service_name(sys.argv),
+            'env': env('APP_ENV', default='local' if DEBUG else 'prod'),
+        },
     },
+    'handlers': {
+        'stdout': {'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout', 'formatter': 'json'},
+    },
+    'root': {'handlers': ['stdout'], 'level': 'INFO'},
     'loggers': {
-        'common': {'handlers': ['stdout'], 'level': 'INFO'},
-        'materials': {'handlers': ['stdout'], 'level': 'INFO'},
-        'lessons': {'handlers': ['stdout'], 'level': 'INFO'},
-        'exams': {'handlers': ['stdout'], 'level': 'INFO'},
+        # Django 기본 콘솔 출력과 겹치지 않게 전부 위 JSON 형식으로 보냅니다.
+        'django': {'handlers': [], 'level': 'INFO', 'propagate': True},
+        # 4xx는 http_request 로그로 남으므로, 여기서는 5xx만 남깁니다.
+        'django.request': {'handlers': [], 'level': 'ERROR', 'propagate': True},
     },
 }
 
