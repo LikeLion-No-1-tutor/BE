@@ -5,7 +5,7 @@
   AI 서버의 원래 code는 original_code로 로그에만 남깁니다.
 - 요청·응답 본문(원본 자료, AI가 만든 내용)은 로그에 남기지 않습니다.
 - mode: REALTIME은 사용자가 기다리는 요청(30초, 다시 부르지 않음),
-  BACKGROUND는 백그라운드 작업(180초, 실패하면 한 번 다시 부름. UNREADABLE_MATERIAL은 다시 불러도 같으므로 제외)
+  BACKGROUND는 백그라운드 작업(180초, 실패하면 한 번 다시 부름. UNREADABLE_MATERIAL과 요청이 거절된 4xx는 다시 불러도 같으므로 제외)
 - parse: 응답에서 필요한 값을 꺼내는 함수. 모양이 틀려 ValueError·KeyError·TypeError가 나면
   INVALID_RESPONSE 실패로 보고, 백그라운드면 다시 부릅니다. 주면 parse의 결과를 돌려줍니다.
 
@@ -37,6 +37,8 @@ REALTIME_TIMEOUT = 30
 
 _TIMEOUTS = {REALTIME: REALTIME_TIMEOUT, BACKGROUND: BACKGROUND_TIMEOUT}
 _ATTEMPTS = {REALTIME: 1, BACKGROUND: 2}
+# 요청 자체가 거절된 경우. 다시 불러도 결과가 같습니다.
+_NOT_RETRYABLE_STATUSES = {400, 401, 403, 404, 422}
 
 
 class AiError(Exception):
@@ -49,7 +51,7 @@ class AiError(Exception):
 
     @property
     def retryable(self):
-        return self.code == 'AI_ERROR'
+        return self.code == 'AI_ERROR' and self.status not in _NOT_RETRYABLE_STATUSES
 
     def as_error_json(self, request_id):
         """materials·lessons·exams 테이블의 error 컬럼에 저장할 값"""

@@ -155,7 +155,7 @@ class RetestAnswerView(APIView):
     def _valid_response(question, data):
         body = AnswerRequest(data=data)
         if not body.is_valid():
-            raise ApiError(400, 'VALIDATION_ERROR', '답을 입력해 주세요.')
+            raise ApiError(400, 'VALIDATION_ERROR', '답은 1~3,000자로 입력해 주세요.')
         response = body.validated_data['response']
         if question.question_type == ExamQuestion.QuestionType.MULTIPLE_CHOICE:
             if response not in {str(i) for i in range(len(question.choices or []))}:
