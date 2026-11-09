@@ -17,7 +17,7 @@ class RetestStartRequest(serializers.Serializer):
 class AnswerRequest(serializers.Serializer):
     """문제 풀이 요청. 앞뒤 공백을 지운 뒤 비어 있으면 안 됨."""
 
-    response = serializers.CharField()
+    response = serializers.CharField(max_length=3000)
 
 
 def report_list_item(report):

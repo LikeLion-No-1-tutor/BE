@@ -21,6 +21,9 @@ ALLOWED_EXTS = {
 }
 
 
+IMAGE_EXTS = {'png', 'jpg', 'jpeg'}
+
+
 def _validation_error(message):
     return ApiError(status.HTTP_400_BAD_REQUEST, 'VALIDATION_ERROR', message)
 
@@ -54,7 +57,8 @@ class MaterialCreateView(APIView):
             ext = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
             if ext not in ALLOWED_EXTS:
                 raise ApiError(status.HTTP_400_BAD_REQUEST, 'UNSUPPORTED_FILE_TYPE', '지원하지 않는 파일 형식이에요.')
-            if uploaded.size > max_bytes:
+            limit = settings.MAX_IMAGE_MB * 1024 * 1024 if ext in IMAGE_EXTS else max_bytes
+            if uploaded.size > limit:
                 raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 'FILE_TOO_LARGE', '파일이 너무 커요.')
         elif len(text.encode('utf-8')) > max_bytes:
             raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 'FILE_TOO_LARGE', '텍스트가 너무 길어요.')

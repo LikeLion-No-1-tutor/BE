@@ -85,6 +85,15 @@ class AiClientTests(SimpleTestCase):
         self.assert_raises_ai_error('UNREADABLE_MATERIAL', 'UNREADABLE_MATERIAL')
         self.assertEqual(self.post.call_count, 1)
 
+    def test_rejected_requests_are_not_retried(self):
+        for http, code in [(400, 'BAD_REQUEST'), (401, 'INVALID_INTERNAL_TOKEN'), (403, 'FORBIDDEN'),
+                           (404, 'NOT_FOUND'), (422, 'VALIDATION_ERROR')]:
+            with self.subTest(http=http):
+                self.post.reset_mock()
+                self.post.return_value = failure(code, http)
+                self.assert_raises_ai_error('AI_ERROR', code)
+                self.assertEqual(self.post.call_count, 1)
+
     def test_timeout_and_connection_error_are_retried(self):
         for exc, original in [(requests.Timeout(), 'DJANGO_TIMEOUT'), (requests.ConnectionError(), 'ConnectionError')]:
             with self.subTest(original=original):

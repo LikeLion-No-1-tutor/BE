@@ -128,11 +128,13 @@ def _save_terms(material_id, terms):
 
 
 def _multipart(material, path):
-    """AI-1·AI-2 공통 필드: title + file 또는 text"""
+    """자료 정리 AI 호출 공통: 제목은 폼 필드로, 자료는 파일로 보냅니다.
+
+    직접 입력한 텍스트도 파일로 보냅니다. 폼 필드로 보내면 AI 서버가 약 1MB에서 거절합니다.
+    """
     data = {'title': material.title}
     if material.source_type == Material.SourceType.TEXT:
-        data['text'] = path.read_text(encoding='utf-8')
-        return data, None
+        return data, ('material.txt', 'text/plain')
     if material.file_ext in CONVERT_TO_PDF_EXTS:
         # 변환한 PDF를 보냄: 원래 이름에 확장자만 .pdf로
         file_name = Path(material.file_name or 'material').stem + '.pdf'
@@ -146,8 +148,6 @@ def _post_material(path_on_ai, material, path, request_id, parse, extra_data=Non
     data, file_info = _multipart(material, path)
     data.update(extra_data or {})
     user_id = material.user_id
-    if file_info is None:
-        return ai_client.call(path_on_ai, request_id=request_id, user_id=user_id, data=data, parse=parse)
     file_name, content_type = file_info
     with open(path, 'rb') as fh:
         return ai_client.call(

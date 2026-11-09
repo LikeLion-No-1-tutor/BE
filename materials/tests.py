@@ -152,8 +152,8 @@ class MaterialUploadTests(APITestCase):
             self.assertEqual(call['headers'], {'X-Internal-Token': 'internal-token', 'X-Request-ID': request_id})
             self.assertEqual(call['timeout'], 180)
             self.assertEqual(call['data']['title'], 'word2vec')
-            self.assertEqual(call['data']['text'], 'word2vec은 단어를 벡터로 ...')
-            self.assertIsNone(call['file'])
+            self.assertNotIn('text', call['data'])
+            self.assertEqual(call['file'], ('material.txt', 'word2vec은 단어를 벡터로 ...'.encode(), 'text/plain'))
         self.assertEqual(json.loads(ai.calls[1]['data']['terms']), TERMS)
 
     def test_pdf_file_is_sent_as_is(self):
@@ -295,6 +295,27 @@ class MaterialUploadTests(APITestCase):
 
         self.assert_error(response, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 'FILE_TOO_LARGE')
         self.assertFalse(Material.objects.exists())
+
+    @override_settings(MAX_IMAGE_MB=1)
+    def test_image_over_image_limit_is_413(self):
+        image = SimpleUploadedFile('photo.png', b'x' * (1024 * 1024 + 1), content_type='image/png')
+        response, _ = self.upload(run_job=False, title='큰 이미지', file=image)
+
+        self.assert_error(response, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 'FILE_TOO_LARGE')
+        self.assertFalse(Material.objects.exists())
+
+    @override_settings(MAX_IMAGE_MB=1)
+    def test_image_limit_does_not_apply_to_other_files(self):
+        response, _ = self.upload(run_job=False, title='큰 PDF', file=self.pdf(content=b'x' * (1024 * 1024 + 1)))
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+
+    def test_long_text_is_sent_as_a_file(self):
+        text = '가' * 400_000  # UTF-8로 1MB가 넘음
+        response, ai = self.upload(title='긴 자료', text=text)
+
+        self.assertEqual(Material.objects.get(pk=response.json()['id']).status, 'ready')
+        self.assertEqual(ai.calls[0]['file'], ('material.txt', text.encode(), 'text/plain'))
 
     def test_nickname_required(self):
         user = User.objects.create_user(email='new@gmail.com', google_sub='sub-new')
