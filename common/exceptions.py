@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 from .errors import ApiError  # noqa: F401  (기존 import 경로 유지: from common.exceptions import ApiError)
-from .middleware import get_request_id
+from .middleware import get_request_id, remember_error_code
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def custom_exception_handler(exc, context):
     request_id = get_request_id(request)
 
     if isinstance(exc, ApiError):
+        remember_error_code(request, exc.error_code)
         return Response(error_body(exc.error_code, exc.message, request_id), status=exc.status_code)
 
     response = exception_handler(exc, context)
@@ -46,6 +47,7 @@ def custom_exception_handler(exc, context):
             'unhandled exception',
             extra={'event': 'exception', 'request_id': request_id, 'exception_type': type(exc).__name__},
         )
+        remember_error_code(request, 'INTERNAL_SERVER_ERROR')
         return Response(
             error_body('INTERNAL_SERVER_ERROR', '잠시 문제가 생겼어요.', request_id),
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -53,11 +55,13 @@ def custom_exception_handler(exc, context):
 
     for exc_types, status_code, code, message in _DEFAULT_ERRORS:
         if isinstance(exc, exc_types):
+            remember_error_code(request, code)
             response.status_code = status_code
             response.data = error_body(code, message, request_id)
             return response
 
     # 그 밖의 DRF 예외 (Throttled 등): 상태 코드는 그대로, code는 DRF의 default_code를 대문자로
     code = getattr(exc, 'default_code', 'error').upper()
+    remember_error_code(request, code)
     response.data = error_body(code, str(getattr(exc, 'detail', '')), request_id)
     return response
