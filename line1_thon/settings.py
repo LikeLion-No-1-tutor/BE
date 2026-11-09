@@ -39,6 +39,13 @@ DEBUG = env.bool('DEBUG')
 # DEBUG=True이고 비어 있으면 Django가 localhost만 허용합니다.
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
+# 운영에서는 게이트웨이 nginx 뒤에서 내부망 HTTP로 동작합니다. HTTPS 리다이렉트와 HSTS는 nginx가 합니다.
+if not DEBUG:
+    # nginx가 X-Forwarded-Proto로 알려 주는 원래 프로토콜을 믿습니다.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 
 # Application definition
 
@@ -196,6 +203,8 @@ LOGGING = {
     'loggers': {
         'common': {'handlers': ['stdout'], 'level': 'INFO'},
         'materials': {'handlers': ['stdout'], 'level': 'INFO'},
+        'lessons': {'handlers': ['stdout'], 'level': 'INFO'},
+        'exams': {'handlers': ['stdout'], 'level': 'INFO'},
     },
 }
 
