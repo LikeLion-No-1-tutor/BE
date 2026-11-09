@@ -14,9 +14,16 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('', include('accounts.urls')),
+    path('', include('personas.urls')),
+    path('', include('materials.urls')),
+    path('', include('lessons.urls')),
+    path('', include('exams.urls')),
 ]
+
+# DEBUG=False일 때 DRF 밖의 404·500도 공통 에러 형식으로
+handler404 = 'common.views.not_found'
+handler500 = 'common.views.server_error'

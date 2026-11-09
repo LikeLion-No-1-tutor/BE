@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 import environ
+from datetime import timedelta
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,21 +35,45 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DEBUG')
 
-ALLOWED_HOSTS = ['*']
+# 쉼표로 구분. 예) ALLOWED_HOSTS=api.example.com,localhost
+# DEBUG=True이고 비어 있으면 Django가 localhost만 허용합니다.
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+
+# 운영에서는 게이트웨이 nginx 뒤에서 내부망 HTTP로 동작합니다. HTTPS 리다이렉트와 HSTS는 nginx가 합니다.
+if not DEBUG:
+    # nginx가 X-Forwarded-Proto로 알려 주는 원래 프로토콜을 믿습니다.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'corsheaders',
+    'django_tasks_db',
+
+    'accounts',
+    'personas',
+    'materials',
+    'lessons',
+    'exams',
 ]
 
+AUTH_USER_MODEL = 'accounts.User'
+
 MIDDLEWARE = [
+    'common.middleware.RequestIDMiddleware',  # 맨 앞: 모든 응답에 X-Request-ID
+    'corsheaders.middleware.CorsMiddleware',  # CommonMiddleware보다 앞. 사전 요청(OPTIONS)에 여기서 답함
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -79,6 +106,8 @@ WSGI_APPLICATION = 'line1_thon.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+from .db_ssl import database_ssl_options  # noqa: E402
+
 DATABASES = {
     'default': {
         'ENGINE': env('DB_ENGINE'),
@@ -87,6 +116,12 @@ DATABASES = {
         'PASSWORD': env('DB_PASSWORD'),
         'HOST': env('DB_HOST'),
         'PORT': env('DB_PORT'),
+        # 운영: 비밀번호 대신 클라이언트 인증서 (DB_SSL_*). 로컬은 비워 두면 SSL 없이
+        'OPTIONS': database_ssl_options(
+            env('DB_SSL_CA', default=''),
+            env('DB_SSL_CERT', default=''),
+            env('DB_SSL_KEY', default=''),
+        ),
     }
 }
 
@@ -115,17 +150,90 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Seoul'
 
 USE_I18N = True
 
 USE_TZ = True
+
+# 평가·재시험 문제 수와 유형 (AI 서버의 출제 요청에 그대로 보냄)
+EXAM_QUESTION_COUNT = env.int('EXAM_QUESTION_COUNT', default=10)
+EXAM_QUESTION_TYPES = ['multiple_choice', 'short_answer']
 
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    # 기본: 로그인 + 닉네임 저장 필요 (07번 이후 API).
+    # 로그인·토큰 재발급은 AllowAny, 닉네임 없이 쓰는 03~06번은 IsAuthenticated만 view에서 지정합니다.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+        'common.permissions.NicknameRequired',
+    ),
+    'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    # 02. 토큰 재발급: 새 refresh 토큰을 주고, 쓴 토큰은 블랙리스트에
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# 기본값 없음: 빠져 있으면 서버가 시작되지 않게 합니다.
+GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID')
+# 빈 값도 막습니다. 빈 값이면 서버는 켜지는데 구글 로그인만 전부 401이 되어 알아채기 어렵습니다.
+if not GOOGLE_CLIENT_ID.strip():
+    raise ImproperlyConfigured('GOOGLE_CLIENT_ID가 비어 있어요. .env에 구글 웹 클라이언트 ID를 넣어 주세요.')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'stdout': {'class': 'logging.StreamHandler', 'stream': 'ext://sys.stdout'},
+    },
+    'loggers': {
+        'common': {'handlers': ['stdout'], 'level': 'INFO'},
+        'materials': {'handlers': ['stdout'], 'level': 'INFO'},
+        'lessons': {'handlers': ['stdout'], 'level': 'INFO'},
+        'exams': {'handlers': ['stdout'], 'level': 'INFO'},
+    },
+}
+
+# AI 서버 (FastAPI). 비어 있으면 AI 호출이 AI_ERROR로 실패합니다.
+AI_SERVER_URL = env('AI_SERVER_URL', default='')
+AI_SERVER_TOKEN = env('AI_SERVER_TOKEN', default='')
+
+# 백엔드와 다른 주소에서 운영하는 프론트엔드. 쉼표로 구분합니다. 예) https://app.example.com,http://localhost:3000
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+# 프론트엔드가 문제를 알릴 때 요청 ID를 읽을 수 있게 합니다.
+CORS_EXPOSE_HEADERS = ['X-Request-ID']
+
+# 08. 학습 자료 업로드
+MAX_UPLOAD_MB = env.int('MAX_UPLOAD_MB', default=20)
+# 원본 임시 저장소. 자료 정리가 끝나면 지웁니다.
+# (.env에 빈 값으로 적혀 있어도 기본값을 쓰도록 `or`로 처리)
+TEMP_UPLOAD_DIR = env('TEMP_UPLOAD_DIR', default='') or str(BASE_DIR / 'tmp_uploads')
+# PPT·DOCX → PDF 변환에 쓰는 LibreOffice 실행 파일
+LIBREOFFICE_PATH = env('LIBREOFFICE_PATH', default='') or 'soffice'
+# Django가 업로드를 막기 전 한도: 파일 제한 + 여유 1MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = (MAX_UPLOAD_MB + 1) * 1024 * 1024
+
+# 백그라운드 작업 (common/jobs.py): 할 일 목록은 DB에, 실행은 따로 도는 worker가 합니다.
+# worker 실행: python manage.py db_worker
+TASKS = {
+    'default': {
+        'BACKEND': 'django_tasks_db.DatabaseBackend',
+    },
+}
 
 
 # Email
