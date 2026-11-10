@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_tasks_db',
+    'drf_spectacular',
 
     'accounts',
     'personas',
@@ -180,6 +181,47 @@ REST_FRAMEWORK = {
         'common.permissions.NicknameRequired',
     ),
     'EXCEPTION_HANDLER': 'common.exceptions.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'common.schema.AutoSchema',
+}
+
+# API 문서: GET /api/docs (Swagger 화면), GET /api/schema (OpenAPI 원본).
+# 기본은 DEBUG와 같아서 운영 서버에는 열리지 않습니다.
+API_DOCS = env.bool('API_DOCS', default=DEBUG)
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': '티칭로그 API',
+    'DESCRIPTION': (
+        '로그인 API로 받은 `access_token`을 **Authorize** 버튼에 넣으면 요청을 보내 볼 수 있습니다.\n\n'
+        '에러는 모두 `{"error": {"code", "message", "request_id"}}` 모양입니다.'
+    ),
+    'VERSION': '1.0.0',
+    # 화면에 보이는 순서
+    'TAGS': [{'name': name} for name in ['인증', '내 정보', '페르소나', '자료', '수업', '성장보고서', '재시험']],
+    'SERVE_INCLUDE_SCHEMA': False,
+    'POSTPROCESSING_HOOKS': [
+        'drf_spectacular.hooks.postprocess_schema_enums',
+        'common.schema.drop_component_descriptions',
+        'common.schema.add_field_examples',
+    ],
+    # 문서는 로그인 없이 봅니다. 운영에서는 API_DOCS로 경로 자체를 만들지 않습니다.
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
+    'SERVE_AUTHENTICATION': [],
+    'SWAGGER_UI_DIST': 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14',
+    'SWAGGER_UI_FAVICON_HREF': 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/favicon-32x32.png',
+    'SWAGGER_UI_SETTINGS': {'persistAuthorization': True, 'displayRequestDuration': True},
+    # 이름이 같은 status, kind 필드가 많아서 값 목록마다 이름을 정해 둡니다.
+    'ENUM_NAME_OVERRIDES': {
+        'MaterialStatusEnum': 'materials.models.Material.Status',
+        'MaterialStepStatusEnum': ['done', 'running', 'pending'],
+        'LessonStatusEnum': 'lessons.models.Lesson.Status',
+        'LessonStepStatusEnum': ['done', 'running', 'pending', 'failed'],
+        'LessonTermStatusEnum': 'lessons.models.LessonTerm.Status',
+        'HandRaiseStatusEnum': 'lessons.models.HandRaise.Status',
+        'MessageKindEnum': 'lessons.models.Message.Kind',
+        'ExamKindEnum': 'exams.models.Exam.Kind',
+        'ExamStatusEnum': 'exams.models.Exam.Status',
+        'ExamStepStatusEnum': ['pending', 'generating', 'solving', 'grading', 'completed', 'failed'],
+    },
 }
 
 SIMPLE_JWT = {

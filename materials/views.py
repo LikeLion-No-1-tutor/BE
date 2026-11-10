@@ -9,7 +9,7 @@ from common import jobs
 from common.errors import ApiError
 from common.middleware import get_request_id
 
-from . import storage
+from . import docs, storage
 from .models import Material
 from .tasks import material_process
 
@@ -36,6 +36,7 @@ class MaterialCreateView(APIView):
 
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    @docs.material_upload
     def post(self, request):
         title = request.data.get('title')
         uploaded = request.FILES.get('file')
@@ -104,6 +105,7 @@ class MaterialDetailView(APIView):
     steps는 저장하지 않고 컬럼으로 계산합니다. 용어 정의와 요약정리는 내려주지 않습니다.
     """
 
+    @docs.material_status
     def get(self, request, material_id):
         material = Material.objects.filter(pk=material_id).first()
         if material is None:

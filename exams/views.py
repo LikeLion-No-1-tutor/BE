@@ -11,6 +11,7 @@ from common.pagination import PagePagination
 from lessons.models import Lesson
 
 from . import ai
+from . import docs
 from .models import Exam, ExamQuestion, Report
 from .retest import run_retest_generate
 from .serializers import (
@@ -60,6 +61,7 @@ def _report_id(lesson_id):
 class ReportListView(APIView):
     """GET /api/reports: 성장보고서 목록 (최신순)"""
 
+    @docs.report_list
     def get(self, request):
         reports = (
             Report.objects.filter(lesson__user=request.user)
@@ -75,6 +77,7 @@ class ReportListView(APIView):
 class ReportDetailView(APIView):
     """GET /api/reports/{report_id}: 성장보고서 상세"""
 
+    @docs.report_detail
     def get(self, request, report_id):
         return Response(report_detail_data(get_own_report(request.user, report_id)))
 
@@ -85,6 +88,7 @@ class RetestStartView(APIView):
     재시험을 generating으로 만들고, 커밋한 뒤 백그라운드 작업 retest_generate를 등록한다.
     """
 
+    @docs.retest_start
     def post(self, request, report_id):
         report = get_own_report(request.user, report_id)
         body = RetestStartRequest(data=request.data)
@@ -112,6 +116,7 @@ class RetestStartView(APIView):
 class RetestDetailView(APIView):
     """GET /api/retests/{retest_id}: 재시험 문제·상태"""
 
+    @docs.retest_detail
     def get(self, request, retest_id):
         exam = get_own_retest(request.user, retest_id)
         return Response(retest_data(exam, _report_id(exam.lesson_id)))
@@ -123,6 +128,7 @@ class RetestAnswerView(APIView):
     객관식은 보기 번호를 그대로 비교하고, 주관식은 주관식 채점 AI를 실시간으로 부른다 (실패하면 저장하지 않음).
     """
 
+    @docs.retest_answer
     def post(self, request, retest_id, number):
         exam = get_own_retest(request.user, retest_id)
         ensure_solving(exam)
@@ -183,6 +189,7 @@ class RetestCompleteView(APIView):
     답하지 않은 문제는 오답으로 채점하고 점수를 저장한다. 보고서의 updated_at을 갱신한다.
     """
 
+    @docs.retest_complete
     def post(self, request, retest_id):
         exam = get_own_retest(request.user, retest_id)
         ensure_solving(exam)
