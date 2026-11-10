@@ -17,6 +17,7 @@ from common.exceptions import ApiError
 from materials import storage as material_storage
 from materials.models import Material
 
+from . import docs
 from .serializers import GoogleLoginRequestSerializer, MeResponseSerializer, UserResponseSerializer
 
 User = get_user_model()
@@ -34,6 +35,7 @@ class GoogleLoginView(APIView):
     authentication_classes = []  # 만료된 Bearer 헤더가 붙어 와도 로그인은 되게
     permission_classes = [AllowAny]
 
+    @docs.google_login
     def post(self, request):
         # 1. 입력값 검증
         serializer = GoogleLoginRequestSerializer(data=request.data)
@@ -126,6 +128,7 @@ class TokenRefreshView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @docs.token_refresh
     def post(self, request):
         token = _required_refresh_token(request)
 
@@ -160,6 +163,7 @@ class LogoutView(APIView):
 
     permission_classes = [IsAuthenticated]  # 닉네임 없이도 로그아웃 가능
 
+    @docs.logout
     def post(self, request):
         token = _required_refresh_token(request)
 
@@ -182,9 +186,11 @@ class MeView(APIView):
 
     permission_classes = [IsAuthenticated]  # 닉네임을 저장하기 전에도 써야 하는 API
 
+    @docs.me
     def get(self, request):
         return Response(MeResponseSerializer(request.user).data, status=status.HTTP_200_OK)
 
+    @docs.me_update
     def patch(self, request):
         data = request.data if isinstance(request.data, dict) else {}
         user = request.user
@@ -212,6 +218,7 @@ class MeView(APIView):
 
         return Response(MeResponseSerializer(user).data, status=status.HTTP_200_OK)
 
+    @docs.me_delete
     def delete(self, request):
         user = request.user
 

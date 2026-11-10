@@ -12,6 +12,7 @@ from materials.models import Material
 from personas.models import Persona
 
 from . import ai
+from . import docs
 from .finish import run_lesson_finish
 from .greetings import greeting_for
 from .models import HandRaise, Lesson, LessonTerm, Message, Note
@@ -79,6 +80,7 @@ def call_ai(request, path, payload, parse):
 class LessonListView(APIView):
     """/api/lessons  GET: 학습 목록, POST: 수업 시작 (권한은 기본값: 로그인 + 닉네임)"""
 
+    @docs.lesson_list
     def get(self, request):
         query = LessonListQuery(data=request.query_params)
         if not query.is_valid():
@@ -95,6 +97,7 @@ class LessonListView(APIView):
         page = paginator.paginate_queryset(lessons, request, view=self)
         return paginator.get_paginated_response([lesson_list_item(lesson) for lesson in page])
 
+    @docs.lesson_start
     def post(self, request):
         body = LessonStartRequest(data=request.data)
         if not body.is_valid():
@@ -131,6 +134,7 @@ class LessonListView(APIView):
 class LessonDetailView(APIView):
     """GET /api/lessons/{lesson_id}: 수업 정보 + 용어 체크리스트"""
 
+    @docs.lesson_detail
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         return Response(lesson_detail_data(lesson))
@@ -146,6 +150,7 @@ class LessonMessagesView(APIView):
     hand_raises는 돌려주는 메시지 바로 아래에 그릴 것(after_message가 그 메시지들 중 하나)만 준다.
     """
 
+    @docs.lesson_messages
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         query = MessagePageQuery(data=request.query_params)
@@ -161,6 +166,7 @@ class LessonMessagesView(APIView):
         hand_raises = lesson.hand_raises.filter(after_message_id__in=[m.id for m in messages])
         return Response(lesson_messages_data(messages, hand_raises))
 
+    @docs.message_send
     def post(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         ensure_teaching(lesson)
@@ -223,6 +229,7 @@ class LessonMessagesView(APIView):
 class HandRaiseAskView(APIView):
     """POST /api/lessons/{lesson_id}/hand-raises/{hand_raise_id}/ask: 질문 받기"""
 
+    @docs.hand_raise_ask
     def post(self, request, lesson_id, hand_raise_id):
         lesson = get_own_lesson(request.user, lesson_id)
         hand_raise = lesson.hand_raises.filter(pk=hand_raise_id).first()
@@ -257,6 +264,7 @@ class LessonEndView(APIView):
     남아 있는 raised 손 든 표시는 그대로 둔다 (질문하지 않은 것으로 기록).
     """
 
+    @docs.lesson_end
     def post(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         ensure_teaching(lesson)
@@ -272,6 +280,7 @@ class LessonEndView(APIView):
 class LessonProgressView(APIView):
     """GET /api/lessons/{lesson_id}/progress: 진행 상태"""
 
+    @docs.lesson_progress
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         return Response(progress_data(lesson, settings.EXAM_QUESTION_COUNT))
@@ -280,6 +289,7 @@ class LessonProgressView(APIView):
 class LessonNoteView(APIView):
     """GET /api/lessons/{lesson_id}/note: 정리노트"""
 
+    @docs.lesson_note
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
         note = Note.objects.filter(lesson=lesson).first()
