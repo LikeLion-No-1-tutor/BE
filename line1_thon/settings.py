@@ -160,8 +160,10 @@ USE_I18N = True
 
 USE_TZ = True
 
-# 평가·재시험 문제 수와 유형 (AI 서버의 출제 요청에 그대로 보냄)
-EXAM_QUESTION_COUNT = env.int('EXAM_QUESTION_COUNT', default=10)
+# 시험 문제 수와 유형 (AI 서버의 출제 요청에 그대로 보냄).
+# 요약정리의 근거 줄보다 문제가 많으면 같은 사실을 여러 문제가 말만 바꿔 묻게 되어 수를 작게 둡니다.
+EVALUATION_QUESTION_COUNT = env.int('EVALUATION_QUESTION_COUNT', default=5)  # 수업 종료 뒤 학생 AI 평가
+RETEST_QUESTION_COUNT = env.int('RETEST_QUESTION_COUNT', default=3)  # 사용자가 푸는 재시험
 EXAM_QUESTION_TYPES = ['multiple_choice', 'short_answer']
 
 

@@ -283,7 +283,7 @@ class LessonProgressView(APIView):
     @docs.lesson_progress
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
-        return Response(progress_data(lesson, settings.EXAM_QUESTION_COUNT))
+        return Response(progress_data(lesson, settings.EVALUATION_QUESTION_COUNT))
 
 
 class LessonNoteView(APIView):
