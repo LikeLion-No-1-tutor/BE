@@ -112,14 +112,14 @@ class _Runner:
             exam.delete()
         return Exam.objects.create(
             lesson=self.lesson, kind=Exam.Kind.EVALUATION, status=Exam.Status.GENERATING,
-            question_count=settings.EXAM_QUESTION_COUNT,
+            question_count=settings.EVALUATION_QUESTION_COUNT,
         )
 
     def _generate(self):
         material = self.lesson.material
         term_ids = set(material.terms.values_list('id', flat=True))
         payload = exam_ai.generate_payload(
-            material, Exam.Kind.EVALUATION, settings.EXAM_QUESTION_COUNT, settings.EXAM_QUESTION_TYPES,
+            material, Exam.Kind.EVALUATION, settings.EVALUATION_QUESTION_COUNT, settings.EXAM_QUESTION_TYPES,
         )
         questions = self._ai(exam_ai.GENERATE_PATH, payload, lambda body: exam_ai.parse_generated(body, term_ids))
         with transaction.atomic():

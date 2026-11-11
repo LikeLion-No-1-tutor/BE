@@ -148,6 +148,11 @@ class LessonFinishTests(FinishFixture):
                 self.assertEqual(headers['X-Request-ID'], 'rid-finish')
                 self.assertEqual(timeout, 180)
 
+    @override_settings(EVALUATION_QUESTION_COUNT=7, RETEST_QUESTION_COUNT=4)
+    def test_evaluation_count_follows_evaluation_setting(self):
+        self.evaluate()
+        self.assertEqual(self.server.payload('/exams/generate')['count'], 7)
+
     def test_payloads(self):
         self.evaluate()
         summary = self.lesson.material.summary
@@ -158,7 +163,7 @@ class LessonFinishTests(FinishFixture):
         self.assertEqual([m['kind'] for m in note['messages']], ['greeting', 'explanation'])
 
         generate = self.server.payload('/exams/generate')
-        self.assertEqual((generate['kind'], generate['count'], generate['summary']), ('evaluation', 10, summary))
+        self.assertEqual((generate['kind'], generate['count'], generate['summary']), ('evaluation', 5, summary))
         self.assertEqual(generate['question_types'], ['multiple_choice', 'short_answer'])
         self.assertEqual([t['name'] for t in generate['terms']], ['분산 표현', '원핫 표현', 'CBOW'])
         self.assertEqual((generate['focus_term_ids'], generate['exclude_questions']), ([], []))
@@ -344,7 +349,7 @@ class LessonProgressTests(FinishFixture):
         self.assertEqual(self.progress(), {
             'lesson_status': 'teaching',
             'note': {'status': 'pending', 'note_id': None},
-            'exam': {'status': 'pending', 'solved': 0, 'total': 10},
+            'exam': {'status': 'pending', 'solved': 0, 'total': 5},
             'report': {'status': 'pending', 'report_id': None},
             'error': None,
         })
