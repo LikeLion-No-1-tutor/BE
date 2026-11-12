@@ -71,7 +71,7 @@ COMPONENTS = {
     'MessageSendRequest': {'content': EXPLANATION, 'reply_to_id': None},
     'HandRaiseItem': {'id': 1, 'after_message_id': 2, 'question_message_id': 3},
     'NewHandRaise': {'id': 1, 'after_message_id': 2},
-    'MessageSentResponse': {'raised_hand_count': 1},
+    'MessageSentResponse': {'new_hand_raise': None, 'raised_hand_count': 0, 'reaction': '아, 그래서 그런 거였군요! 이유를 들으니까 이해돼요.'},
     'QuestionAskedResponse': {'raised_hand_count': 0},
     'LessonEndResponse': {'id': 1},
     'NoteStep': {'note_id': 1},
