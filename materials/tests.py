@@ -289,6 +289,24 @@ class MaterialUploadTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(Material.objects.get().file_ext, 'jpg')
 
+    def test_webp_image_is_processed_as_image_webp(self):
+        webp = b'RIFF\x1a\x00\x00\x00WEBPVP8 fake'
+        response, ai = self.upload(title='칠판 사진', file=SimpleUploadedFile('Board.WEBP', webp, content_type='image/webp'))
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        material = Material.objects.get(pk=response.json()['id'])
+        self.assertEqual((material.file_ext, material.status), ('webp', 'ready'))
+        # 변환 없이 그대로, 서버의 /etc/mime.types와 상관없이 image/webp로
+        self.assertEqual(ai.calls[0]['file'], ('Board.WEBP', webp, 'image/webp'))
+
+    @override_settings(MAX_IMAGE_MB=1)
+    def test_webp_over_image_limit_is_413(self):
+        image = SimpleUploadedFile('photo.webp', b'x' * (1024 * 1024 + 1), content_type='image/webp')
+        response, _ = self.upload(run_job=False, title='큰 이미지', file=image)
+
+        self.assert_error(response, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 'FILE_TOO_LARGE')
+        self.assertFalse(Material.objects.exists())
+
     @override_settings(MAX_UPLOAD_MB=0)
     def test_file_too_large(self):
         response, _ = self.upload(run_job=False, title='큰 파일', file=self.pdf())
