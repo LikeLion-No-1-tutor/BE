@@ -146,9 +146,17 @@ def _note_question(item):
 
 
 def parse_analyze_result(body):
-    """용어 판정·손 들기 응답에서 (용어 판정 목록, 손 든 이유 또는 None)을 꺼낸다."""
+    """용어 판정·손 들기 응답에서 (용어 판정 목록, 손 든 이유 또는 None, 학생 반응 또는 None)을 꺼낸다.
+
+    학생 반응은 선생님이 학생 질문에 답했고 학생이 다시 손 들지 않았을 때만 오는 고정 문장이다.
+    화면에 보여 주기만 하고 수업 대화에는 저장하지 않는다 (다음 AI 호출의 대화에 끼어들지 않게).
+    """
     term_updates = body.get('term_updates')
     hand_raise = body.get('hand_raise')
+    reaction = body.get('reaction')
+    if reaction is not None and not isinstance(reaction, str):
+        raise ValueError('reaction이 문자열이 아님')
+    reaction = (reaction or '').strip() or None
     if not isinstance(term_updates, list):
         raise ValueError('term_updates가 배열이 아님')
     updates = []
@@ -158,11 +166,11 @@ def parse_analyze_result(body):
         if item.get('status') in TERM_RANK:
             updates.append((item['term_id'], item['status']))
     if hand_raise is None:
-        return updates, None
+        return updates, None, reaction
     if not isinstance(hand_raise, dict) or not isinstance(hand_raise.get('reason'), str):
         raise ValueError('hand_raise 형식이 틀림')
     reason = hand_raise['reason'].strip()
-    return updates, reason or None
+    return updates, reason or None, reaction
 
 
 def parse_question_result(body):

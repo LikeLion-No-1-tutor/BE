@@ -100,6 +100,13 @@ class MessageSentResponse(serializers.Serializer):
     term_summary = TermSummary()
     new_hand_raise = NewHandRaise(allow_null=True, help_text='학생 AI가 새로 손을 들었으면 값이 있음')
     raised_hand_count = serializers.IntegerField()
+    reaction = serializers.CharField(
+        allow_null=True,
+        help_text=(
+            '학생 AI의 짧은 반응. 학생 질문에 답했고 학생이 다시 손 들지 않았을 때만 값이 있음. '
+            '말풍선으로 보여 주기만 하고 수업 대화에는 저장되지 않음'
+        ),
+    )
 
 
 class QuestionAskedResponse(serializers.Serializer):
@@ -218,7 +225,8 @@ message_send = operation(
     'message_send', TAG, '설명과 답변 보내기',
     description=(
         '학생 AI가 설명을 듣고 용어 체크리스트를 갱신하고, 궁금한 점이 있으면 손을 듭니다. '
-        '학생 질문에 답할 때는 `reply_to_id`에 질문 메시지 id를 넣습니다. AI를 기다리므로 몇 초 걸립니다.'
+        '학생 질문에 답할 때는 `reply_to_id`에 질문 메시지 id를 넣습니다. '
+        '답을 듣고 학생이 다시 손 들지 않으면 `reaction`에 학생의 짧은 반응이 옵니다. AI를 기다리므로 몇 초 걸립니다.'
     ),
     request=MessageSendRequest,
     responses={
