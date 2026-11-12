@@ -137,11 +137,30 @@ class LessonProgressResponse(serializers.Serializer):
     error = StoredError(allow_null=True, help_text='lesson_status가 failed일 때만 값이 있음')
 
 
+class NoteQuestion(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=['answered', 'unseen'], help_text='answered: 학생 AI의 질문과 나의 답변, unseen: 확인하지 않은 질문',
+    )
+    question = serializers.CharField(help_text='학생 AI의 질문')
+    answer = serializers.CharField(allow_null=True, help_text='선생님이 한 답 원문. unseen이면 null')
+
+
+class NoteSection(serializers.Serializer):
+    term_id = serializers.IntegerField(allow_null=True, help_text="null이면 어느 용어에도 맞지 않는 내용 ('그 밖에 배운 내용')")
+    name = serializers.CharField(help_text='용어 이름')
+    concept = serializers.CharField(help_text='학생 AI가 정리한 개념. 줄마다 줄바꿈(\\n)')
+    questions = NoteQuestion(many=True)
+
+
 class NoteResponse(serializers.Serializer):
     id = serializers.IntegerField()
     lesson_id = serializers.IntegerField()
     persona_name = serializers.CharField()
-    content = serializers.CharField(help_text='마크다운')
+    content = serializers.CharField(help_text='같은 내용의 마크다운 (저장, 내보내기용)')
+    sections = NoteSection(
+        many=True,
+        help_text='화면용 용어별 구성. 체크리스트 순서이고, 끝에 term_id가 null인 섹션이 붙을 수 있음. 예전 노트는 빈 배열',
+    )
     created_at = serializers.DateTimeField()
 
 
@@ -231,5 +250,6 @@ lesson_progress = operation(
 
 lesson_note = operation(
     'lesson_note', TAG, '정리노트',
+    description='체크리스트 용어마다 개념, 학생 AI의 질문과 나의 답변, 확인하지 않은 질문으로 나뉩니다.',
     responses={200: NoteResponse, **errors(OWNED, s409=['NOTE_NOT_READY'])},
 )

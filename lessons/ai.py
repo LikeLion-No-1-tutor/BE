@@ -80,20 +80,69 @@ def question_payload(lesson, hand_raise):
 
 
 def note_payload(lesson):
-    """정리노트 작성 요청. 학생 AI가 배운 대화만으로 정리노트를 쓴다."""
+    """정리노트 작성 요청. 학생 AI가 배운 대화만으로 정리노트를 쓴다.
+
+    노트는 체크리스트 용어마다 '개념, 학생 AI의 질문과 나의 답변, 확인하지 않은 질문'으로 나뉜다.
+    """
+    raised_reasons = lesson.hand_raises.filter(status=HandRaise.Status.RAISED).values_list('reason', flat=True)
     return {
         'title': lesson.material.title,
         'persona': persona_payload(lesson.persona),
         'messages': [message_payload(m) for m in lesson.messages.all()],
+        # 체크리스트 용어 (화면에 보이는 순서)
+        'terms': [
+            {'term_id': lesson_term.term_id, 'name': lesson_term.term.name}
+            for lesson_term in lesson.lesson_terms.select_related('term')
+        ],
+        # 손 들었지만 질문받지 않은 이유 → 노트의 '확인하지 않은 질문'
+        'raised_reasons': list(raised_reasons),
     }
 
 
-def parse_note(body):
-    """정리노트 작성 응답의 Markdown."""
+NOTE_QUESTION_STATUSES = {'answered', 'unseen'}  # 학생 AI의 질문과 나의 답변 / 확인하지 않은 질문
+
+
+def parse_note(body, term_ids):
+    """정리노트 작성 응답 → (Markdown, 용어별 구성).
+
+    용어별 구성은 화면이 용어마다 박스를 그리는 데 쓴다. 요청에 없던 term_id는 None('그 밖에 배운 내용')으로.
+    """
     content = body['content']
     if not isinstance(content, str) or not content.strip():
         raise ValueError('content가 비었음')
-    return content.strip()
+    sections = body.get('terms', [])
+    if not isinstance(sections, list):
+        raise ValueError('terms가 배열이 아님')
+    return content.strip(), [_note_section(item, term_ids) for item in sections]
+
+
+def _note_section(item, term_ids):
+    if not isinstance(item, dict):
+        raise ValueError('terms 항목이 객체가 아님')
+    term_id, name, concept, questions = item.get('term_id'), item.get('name'), item.get('concept'), item.get('questions')
+    if term_id is not None and (not isinstance(term_id, int) or isinstance(term_id, bool)):
+        raise ValueError(f'term_id가 숫자가 아님: {term_id!r}')
+    if not isinstance(name, str) or not name.strip() or not isinstance(concept, str):
+        raise ValueError('name 또는 concept가 잘못됨')
+    if not isinstance(questions, list):
+        raise ValueError('questions가 배열이 아님')
+    return {
+        'term_id': term_id if term_id in term_ids else None,
+        'name': name.strip(),
+        'concept': concept.strip(),
+        'questions': [_note_question(question) for question in questions],
+    }
+
+
+def _note_question(item):
+    if not isinstance(item, dict) or item.get('status') not in NOTE_QUESTION_STATUSES:
+        raise ValueError('질문 항목이나 status가 잘못됨')
+    question, answer = item.get('question'), item.get('answer')
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError('question이 비었음')
+    if answer is not None and not isinstance(answer, str):
+        raise ValueError('answer가 문자열이 아님')
+    return {'status': item['status'], 'question': question.strip(), 'answer': answer}
 
 
 def parse_analyze_result(body):

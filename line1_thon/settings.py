@@ -223,6 +223,7 @@ SPECTACULAR_SETTINGS = {
         'ExamKindEnum': 'exams.models.Exam.Kind',
         'ExamStatusEnum': 'exams.models.Exam.Status',
         'ExamStepStatusEnum': ['pending', 'generating', 'solving', 'grading', 'completed', 'failed'],
+        'NoteQuestionStatusEnum': ['answered', 'unseen'],
     },
 }
 
