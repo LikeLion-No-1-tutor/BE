@@ -16,10 +16,11 @@ from .tests import URL, LessonFixture, assert_error
 USAGE = [{'role': 'judge', 'model': 'm', 'input_tokens': 1, 'output_tokens': 1}]
 
 
-def analyze_result(term_updates=(), reason=None):
+def analyze_result(term_updates=(), reason=None, reaction=None):
     return {
         'term_updates': [{'term_id': term_id, 'status': value} for term_id, value in term_updates],
         'hand_raise': None if reason is None else {'reason': reason},
+        'reaction': reaction,
         'usage': USAGE,
     }
 
@@ -84,6 +85,7 @@ class SendMessageTests(ChatFixture):
         self.assertEqual(body['new_hand_raise'], {'id': hand_raise.id, 'after_message_id': message.id,
                                                   'status': 'raised'})
         self.assertEqual(body['raised_hand_count'], 1)
+        self.assertIsNone(body['reaction'])
         self.assertNotIn('언제 쓰는지', response.content.decode())  # reason은 내려주지 않음
 
         self.assertEqual(hand_raise.reason, 'CBOW와 스킵그램을 언제 쓰는지 궁금함')
@@ -153,6 +155,32 @@ class SendMessageTests(ChatFixture):
         self.assertEqual(payload['judge']['reply_to_question'], '단어 벡터는 어디서 나와요?')
         self.assertEqual(payload['student']['messages'][-1]['reply_to_id'], question.id)
 
+    def test_reaction_after_answer_is_shown_but_not_saved(self):
+        question = self.say('단어 벡터는 어디서 나와요?', sender='student', kind='question')
+        self.ai.return_value = analyze_result(reaction=' 아, 그래서 그런 거였군요! 이유를 들으니까 이해돼요. ')
+
+        body = self.send('입력층 가중치의 각 행이야.', reply_to_id=question.id).json()
+
+        self.assertEqual(body['reaction'], '아, 그래서 그런 거였군요! 이유를 들으니까 이해돼요.')
+        # 수업 대화에는 저장하지 않음: 첫 인사, 질문, 방금 보낸 답만
+        self.assertEqual(
+            list(Message.objects.filter(lesson=self.lesson).values_list('kind', flat=True)),
+            ['greeting', 'question', 'answer'],
+        )
+        messages = self.client.get(f'{URL}/{self.lesson.id}/messages').json()['messages']
+        self.assertNotIn('이유를 들으니까', str(messages))
+        # 다음 AI 호출의 대화에도 들어가지 않음
+        self.ai.return_value = analyze_result()
+        self.send('다음 설명')
+        _, payload = self.sent_payload()
+        self.assertNotIn('이유를 들으니까', str(payload))
+
+    def test_missing_or_blank_reaction_is_null(self):
+        for result in [{'term_updates': [], 'hand_raise': None}, analyze_result(reaction='  ')]:
+            with self.subTest(result=result):
+                self.ai.return_value = result
+                self.assertIsNone(self.send().json()['reaction'])
+
     def test_terms_only_go_up(self):
         self.set_term('분산 표현', 'explained')
         self.set_term('원핫 표현', 'mentioned')
@@ -211,7 +239,8 @@ class SendMessageTests(ChatFixture):
 
     def test_unexpected_ai_response_saves_nothing(self):
         for result in [{}, {'term_updates': 'x'}, {'term_updates': [{'term_id': 'a'}]},
-                       {'term_updates': [], 'hand_raise': 'x'}]:
+                       {'term_updates': [], 'hand_raise': 'x'},
+                       {'term_updates': [], 'hand_raise': None, 'reaction': ['아하']}]:
             with self.subTest(result=result):
                 self.ai.return_value = result
                 with self.assertLogs('common.ai_client', level='ERROR') as logs:

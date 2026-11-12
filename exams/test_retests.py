@@ -69,6 +69,11 @@ class RetestStartTests(RetestFixture):
         return (client or self.client).post(f'/api/reports/{report_id or self.report.id}/retests',
                                             body or {}, format='json')
 
+    @override_settings(RETEST_QUESTION_COUNT=4, EVALUATION_QUESTION_COUNT=7)
+    def test_question_count_follows_retest_setting(self):
+        self.assertEqual(self.start().status_code, 202)
+        self.assertEqual(Exam.objects.get(kind='retest').question_count, 4)
+
     def test_start_enqueues_job(self):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.start({'focus': 'all'})
@@ -76,7 +81,7 @@ class RetestStartTests(RetestFixture):
         self.assertEqual(response.status_code, 202, response.content)
         exam = Exam.objects.get(kind='retest')
         self.assertEqual(response.json(), {'id': exam.id, 'status': 'generating'})
-        self.assertEqual((exam.lesson, exam.question_count), (self.lesson, 10))
+        self.assertEqual((exam.lesson, exam.question_count), (self.lesson, 3))  # 평가(5문항)와 따로
         job = DBTaskResult.objects.get()
         self.assertEqual(job.task_path, 'common.jobs.run_job')
         self.assertEqual(job.args_kwargs['args'], [
@@ -120,7 +125,7 @@ class RetestGenerateTests(RetestFixture):
     """백그라운드 처리 run_retest_generate"""
 
     def make_generating(self):
-        return Exam.objects.create(lesson=self.lesson, kind='retest', status='generating', question_count=10)
+        return Exam.objects.create(lesson=self.lesson, kind='retest', status='generating', question_count=3)
 
     def run_job(self, exam, focus='missed_terms'):
         with self.assertLogs('exams.retest', level='INFO') as logs:
@@ -146,7 +151,7 @@ class RetestGenerateTests(RetestFixture):
         self.run_job(self.make_generating(), focus='missed_terms')
 
         payload = self.ai_payload()
-        self.assertEqual((payload['kind'], payload['count']), ('retest', 10))
+        self.assertEqual((payload['kind'], payload['count']), ('retest', 3))
         self.assertEqual(payload['summary'], self.lesson.material.summary)
         # explained가 아닌 용어 (원핫 표현, CBOW)
         self.assertEqual(payload['focus_term_ids'], [self.term_ids['원핫 표현'], self.term_ids['CBOW']])

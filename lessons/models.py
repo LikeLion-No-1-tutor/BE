@@ -109,6 +109,8 @@ class Note(models.Model):
 
     lesson = models.OneToOneField(Lesson, on_delete=models.CASCADE, related_name='note')
     content = models.TextField()  # Markdown
+    # 화면용 용어별 구성 [{term_id, name, concept, questions: [{status, question, answer}]}]. AI 서버 응답 그대로
+    sections = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -68,12 +68,20 @@ class LessonStartTests(TestCase):
 
     def test_greeting_differs_by_persona(self):
         contents = set()
-        for code in ['haneul', 'minjun', 'seoyeon']:
+        for code in ['haneul', 'minjun', 'seoyeon', 'hyunwoo']:
             material = make_ready_material(self.user, title='RNN')
             persona = Persona.objects.get(code=code)
             body = self.start(material_id=material.id, persona_id=persona.id).json()
             contents.add(body['messages'][0]['content'])
-        self.assertEqual(len(contents), 3)
+        self.assertEqual(len(contents), 4)
+
+    def test_professor_greeting(self):
+        professor = Persona.objects.get(code='hyunwoo')
+        body = self.start(persona_id=professor.id).json()
+        self.assertEqual(
+            body['messages'][0]['content'],
+            '안녕하세요, 선생님. 오늘은 word2vec을(를) 처음 배우러 왔습니다. 정의와 근거를 하나씩 여쭤보면서 듣겠습니다.',
+        )
 
     def test_rows_are_saved(self):
         self.start()
@@ -177,7 +185,7 @@ class LessonModelTests(TestCase):
         for model in [Lesson, Message, HandRaise, LessonTerm, Note, Exam, ExamQuestion, Report, Material]:
             with self.subTest(model=model.__name__):
                 self.assertFalse(model.objects.exists())
-        self.assertEqual(Persona.objects.count(), 3)
+        self.assertEqual(Persona.objects.count(), 4)  # 페르소나는 남음
 
 
 class LessonFixture(TestCase):

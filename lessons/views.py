@@ -179,7 +179,9 @@ class LessonMessagesView(APIView):
 
         # AI를 기다리는 동안에는 트랜잭션을 열지 않는다. 실패하면 아무것도 저장하지 않음
         payload = ai.analyze_payload(lesson, kind, content, reply_to)
-        term_updates, hand_raise_reason = call_ai(request, ai.ANALYZE_PATH, payload, ai.parse_analyze_result)
+        term_updates, hand_raise_reason, reaction = call_ai(
+            request, ai.ANALYZE_PATH, payload, ai.parse_analyze_result,
+        )
 
         with transaction.atomic():
             lesson = lock_teaching_lesson(lesson.id)
@@ -193,7 +195,7 @@ class LessonMessagesView(APIView):
                     lesson=lesson, after_message=message, reason=hand_raise_reason,
                 )
 
-        data = message_sent_data(lesson, message, changed_terms, new_hand_raise)
+        data = message_sent_data(lesson, message, changed_terms, new_hand_raise, reaction)
         return Response(data, status=status.HTTP_201_CREATED)
 
     @staticmethod
@@ -283,7 +285,7 @@ class LessonProgressView(APIView):
     @docs.lesson_progress
     def get(self, request, lesson_id):
         lesson = get_own_lesson(request.user, lesson_id)
-        return Response(progress_data(lesson, settings.EXAM_QUESTION_COUNT))
+        return Response(progress_data(lesson, settings.EVALUATION_QUESTION_COUNT))
 
 
 class LessonNoteView(APIView):

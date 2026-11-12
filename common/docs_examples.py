@@ -41,7 +41,7 @@ COMPONENTS = {
     # 페르소나
     'Persona': {
         'id': 2, 'code': 'minjun', 'name': '민준', 'grade_label': '고1',
-        'description': '교과서 수준은 알아요. 이유를 자주 물어요.',
+        'description': '"왜요?"를 파고들고, 이해하면 자기 말로 정리해요.',
     },
     'PersonaBrief': {'id': 2, 'name': '민준', 'grade_label': '고1'},
 
@@ -71,11 +71,11 @@ COMPONENTS = {
     'MessageSendRequest': {'content': EXPLANATION, 'reply_to_id': None},
     'HandRaiseItem': {'id': 1, 'after_message_id': 2, 'question_message_id': 3},
     'NewHandRaise': {'id': 1, 'after_message_id': 2},
-    'MessageSentResponse': {'raised_hand_count': 1},
+    'MessageSentResponse': {'new_hand_raise': None, 'raised_hand_count': 0, 'reaction': '아, 그래서 그런 거였군요! 이유를 들으니까 이해돼요.'},
     'QuestionAskedResponse': {'raised_hand_count': 0},
     'LessonEndResponse': {'id': 1},
     'NoteStep': {'note_id': 1},
-    'ExamStep': {'solved': 10, 'total': 10},
+    'ExamStep': {'solved': 5, 'total': 5},
     'ReportStep': {'report_id': 1},
     'NoteResponse': {
         'id': 1, 'lesson_id': 1, 'persona_name': '민준',
@@ -86,15 +86,23 @@ COMPONENTS = {
         ),
         'created_at': CREATED_AT,
     },
+    'NoteSection': {
+        'term_id': 1, 'name': '스택',
+        'concept': '스택 = 마지막에 넣은 데이터를 먼저 꺼내는 구조 → 그래서 LIFO라고 부름.\npush로 넣고 pop으로 뺌.',
+    },
+    'NoteQuestion': {
+        'question': '그럼 큐는 스택이랑 뭐가 달라요?',
+        'answer': '큐는 먼저 넣은 데이터를 먼저 꺼내요. 줄 서기랑 같아요.',
+    },
     'LessonListItem': {
         'id': 1, 'title': MATERIAL_TITLE, 'persona_name': '민준', 'started_at': STARTED_AT,
-        'score': 70, 'latest_score': 90, 'report_id': 1,
+        'score': 60, 'latest_score': 67, 'report_id': 1,
     },
     'LessonListResponse': {'page': 1, 'size': 20, 'total': 3},
 
     # 성장보고서
     'ReportListItem': {
-        'id': 1, 'lesson_id': 1, 'title': MATERIAL_TITLE, 'score': 70, 'latest_score': 90, 'retest_count': 1,
+        'id': 1, 'lesson_id': 1, 'title': MATERIAL_TITLE, 'score': 60, 'latest_score': 67, 'retest_count': 1,
         'created_at': CREATED_AT,
     },
     'ReportListResponse': {'page': 1, 'size': 20, 'total': 3},
@@ -102,9 +110,9 @@ COMPONENTS = {
         'id': 1, 'title': MATERIAL_TITLE, 'persona_name': '민준', 'persona_grade_label': '고1',
         'started_at': STARTED_AT,
     },
-    'ScoreHistoryItem': {'exam_id': 1, 'score': 70, 'completed_at': '2026-11-11T14:41:30+09:00'},
-    'ScoreComparison': {'current_score': 90, 'previous_score': 70, 'diff': 20},
-    'EvaluationSummary': {'correct': 7, 'total': 10},
+    'ScoreHistoryItem': {'exam_id': 1, 'score': 60, 'completed_at': '2026-11-11T14:41:30+09:00'},
+    'ScoreComparison': {'current_score': 67, 'previous_score': 60, 'diff': 7},
+    'EvaluationSummary': {'correct': 3, 'total': 5},
     'EvaluationResult': {'number': 1, 'is_correct': True, 'term_id': 1},
     'TermCount': {'explained': 2, 'total': 3},
     'MissedTerm': {'term_id': 3, 'name': '원형 큐', 'wrong_count': 2},
@@ -112,14 +120,14 @@ COMPONENTS = {
         'term_id': 3, 'text': '원형 큐에서 front와 rear가 배열 끝에서 처음으로 돌아가는 과정을 그림으로 다시 설명해 보세요.',
     },
     'ReportDetailResponse': {
-        'id': 1, 'score': 70,
+        'id': 1, 'score': 60,
         'strengths': ['스택을 접시 쌓기에 비유해 쉽게 설명했어요.', '학생 질문에 스택과 큐를 비교해 답했어요.'],
         'created_at': CREATED_AT, 'updated_at': '2026-11-12T09:10:00+09:00',
     },
 
     # 재시험
     'RetestStartResponse': {'id': 2},
-    'RetestResponse': {'id': 2, 'report_id': 1, 'total': 10},
+    'RetestResponse': {'id': 2, 'report_id': 1, 'total': 3},
     'RetestQuestion': {
         'number': 1, 'content': '스택에서 pop을 하면 어떤 데이터가 나오나요?',
         'choices': ['가장 마지막에 넣은 데이터', '가장 먼저 넣은 데이터', '가장 작은 값'],
@@ -131,7 +139,7 @@ COMPONENTS = {
         'number': 1, 'is_correct': True, 'correct_answer': '0',
         'explanation': RETEST_EXPLANATION,
     },
-    'RetestCompleteResponse': {'id': 2, 'correct': 9, 'total': 10, 'score': 90, 'report_id': 1},
+    'RetestCompleteResponse': {'id': 2, 'correct': 2, 'total': 3, 'score': 67, 'report_id': 1},
 }
 
 # 에러 코드마다 보여 줄 메시지

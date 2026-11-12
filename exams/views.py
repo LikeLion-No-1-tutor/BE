@@ -106,7 +106,7 @@ class RetestStartView(APIView):
                 raise ApiError(409, 'RETEST_GENERATING', '재시험을 출제하는 중이에요.')
             exam = Exam.objects.create(
                 lesson_id=report.lesson_id, kind=Exam.Kind.RETEST, status=Exam.Status.GENERATING,
-                question_count=settings.EXAM_QUESTION_COUNT,
+                question_count=settings.RETEST_QUESTION_COUNT,
             )
             jobs.enqueue(run_retest_generate, exam.id, focus, request.request_id)
 

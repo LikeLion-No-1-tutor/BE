@@ -13,15 +13,15 @@ from . import docs, storage
 from .models import Material
 from .tasks import material_process
 
-# PDF, PPT(X), DOC(X), TXT, MD, 이미지(PNG·JPG), 소스코드
+# PDF, PPT(X), DOC(X), TXT, MD, 이미지(PNG, JPG, WebP), 소스코드
 ALLOWED_EXTS = {
-    'pdf', 'ppt', 'pptx', 'doc', 'docx', 'txt', 'md', 'png', 'jpg', 'jpeg',
+    'pdf', 'ppt', 'pptx', 'doc', 'docx', 'txt', 'md', 'png', 'jpg', 'jpeg', 'webp',
     'py', 'js', 'ts', 'jsx', 'tsx', 'java', 'kt', 'c', 'h', 'cpp', 'hpp', 'cs', 'go', 'rs',
     'swift', 'rb', 'php', 'html', 'css', 'sql', 'sh',
 }
 
 
-IMAGE_EXTS = {'png', 'jpg', 'jpeg'}
+IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'webp'}
 
 
 def _validation_error(message):

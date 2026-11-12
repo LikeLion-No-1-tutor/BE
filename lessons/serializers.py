@@ -134,8 +134,11 @@ def raised_hand_count(lesson):
     return lesson.hand_raises.filter(status=HandRaise.Status.RAISED).count()
 
 
-def message_sent_data(lesson, message, changed_terms, new_hand_raise):
-    """설명·답변 보내기의 응답. changed_terms는 이번 메시지로 상태가 바뀐 LessonTerm 목록."""
+def message_sent_data(lesson, message, changed_terms, new_hand_raise, reaction=None):
+    """설명·답변 보내기의 응답. changed_terms는 이번 메시지로 상태가 바뀐 LessonTerm 목록.
+
+    reaction은 학생 AI의 짧은 반응 문장(저장하지 않음). 없으면 None.
+    """
     return {
         'message': message_data(message),
         'term_updates': [lesson_term_data(lesson_term) for lesson_term in changed_terms],
@@ -146,6 +149,7 @@ def message_sent_data(lesson, message, changed_terms, new_hand_raise):
             'status': new_hand_raise.status,
         },
         'raised_hand_count': raised_hand_count(lesson),
+        'reaction': reaction,
     }
 
 
@@ -165,6 +169,7 @@ def note_data(note, lesson):
         'lesson_id': lesson.id,
         'persona_name': lesson.persona.name,
         'content': note.content,
+        'sections': note.sections,
         'created_at': iso(note.created_at),
     }
 
