@@ -50,7 +50,7 @@ material_upload = operation(
     'material_upload', '자료', '학습 자료 업로드',
     description=(
         f'자료를 받고 바로 `202`를 돌려줍니다. 정리는 백그라운드에서 하므로 자료 정리 상태 API로 확인합니다.\n\n'
-        f'- 파일: PDF, PPT(X), DOC(X), TXT, MD, PNG, JPG, 소스 코드. 최대 {settings.MAX_UPLOAD_MB}MB, '
+        f'- 파일: PDF, PPT(X), DOC(X), TXT, MD, PNG, JPG, WebP, 소스 코드. 최대 {settings.MAX_UPLOAD_MB}MB, '
         f'이미지는 {settings.MAX_IMAGE_MB}MB\n'
         f'- 텍스트만 보낼 때는 JSON 본문 `{{"title", "text"}}`도 됩니다.'
     ),

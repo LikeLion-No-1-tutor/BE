@@ -26,6 +26,9 @@ from . import storage
 from .conversion import CONVERT_TO_PDF_EXTS, convert_to_pdf
 from .models import Material, Term
 
+# Python 3.12의 기본 목록에는 WebP가 없어서 서버의 /etc/mime.types에 따라 달라짐. 항상 같은 형식으로 보내도록 등록
+mimetypes.add_type('image/webp', '.webp')
+
 logger = logging.getLogger(__name__)
 
 JOB = 'material_process'
