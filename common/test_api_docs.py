@@ -366,7 +366,14 @@ class ResponsesMatchDocsTests(TestCase):
         lesson = make_lesson(self.user, 'word2vec', day=1)
         Lesson.objects.filter(pk=lesson.pk).update(ended_at=lesson.started_at)
         LessonTerm.objects.filter(lesson=lesson, term__name='분산 표현').update(status='explained')
-        Note.objects.create(lesson=lesson, content='# 정리노트')
+        cbow = lesson.material.terms.get(name='CBOW')
+        Note.objects.create(lesson=lesson, content='# 정리노트', sections=[
+            {'term_id': cbow.id, 'name': 'CBOW', 'concept': '주변 단어로 가운데 단어를 맞힘', 'questions': [
+                {'status': 'answered', 'question': '왜요?', 'answer': '문맥을 배우려고.'},
+                {'status': 'unseen', 'question': '창 크기는요?', 'answer': None},
+            ]},
+            {'term_id': None, 'name': '그 밖에 배운 내용', 'concept': '', 'questions': []},
+        ])
         add_exam(lesson, 'evaluation', 50, minutes=30, results=[(True, '분산 표현'), (False, 'CBOW'), (None, None)])
         cbow = lesson.material.terms.get(name='CBOW')
         Report.objects.create(

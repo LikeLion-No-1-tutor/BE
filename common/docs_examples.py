@@ -86,6 +86,14 @@ COMPONENTS = {
         ),
         'created_at': CREATED_AT,
     },
+    'NoteSection': {
+        'term_id': 1, 'name': '스택',
+        'concept': '스택 = 마지막에 넣은 데이터를 먼저 꺼내는 구조 → 그래서 LIFO라고 부름.\npush로 넣고 pop으로 뺌.',
+    },
+    'NoteQuestion': {
+        'question': '그럼 큐는 스택이랑 뭐가 달라요?',
+        'answer': '큐는 먼저 넣은 데이터를 먼저 꺼내요. 줄 서기랑 같아요.',
+    },
     'LessonListItem': {
         'id': 1, 'title': MATERIAL_TITLE, 'persona_name': '민준', 'started_at': STARTED_AT,
         'score': 60, 'latest_score': 67, 'report_id': 1,

@@ -165,6 +165,7 @@ def note_data(note, lesson):
         'lesson_id': lesson.id,
         'persona_name': lesson.persona.name,
         'content': note.content,
+        'sections': note.sections,
         'created_at': iso(note.created_at),
     }
 

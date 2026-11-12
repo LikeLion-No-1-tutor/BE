@@ -6,7 +6,7 @@ AI 서버는 requests.post를 가짜 서버(FakeAIServer)로 바꿔 대신한다
 import json
 from unittest.mock import Mock, patch
 
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django_tasks_db.models import DBTaskResult
 from rest_framework.test import APIClient
 
@@ -14,6 +14,7 @@ from common.testing import client_for, make_user
 from exams.models import Exam, ExamQuestion, Report
 from materials.tests import IMMEDIATE_TASKS
 
+from . import ai
 from .finish import run_lesson_finish
 from .models import HandRaise, Lesson, Note
 from .tests import URL, LessonFixture, assert_error
@@ -35,7 +36,20 @@ class FakeAIServer:
     def __init__(self, term_ids):
         cbow, onehot = term_ids['CBOW'], term_ids['원핫 표현']
         self.responses = {
-            '/lessons/note': {'content': '# word2vec 정리노트\n\n선생님이 말씀하셨다.'},
+            '/lessons/note': {
+                'content': '# word2vec 정리노트\n\n선생님이 말씀하셨다.',
+                'terms': [
+                    {'term_id': term_ids['분산 표현'], 'name': '분산 표현', 'concept': '', 'questions': []},
+                    {'term_id': onehot, 'name': '원핫 표현', 'concept': '', 'questions': []},
+                    {'term_id': cbow, 'name': 'CBOW', 'concept': ' CBOW = 주변 단어로 가운데 단어 맞히기 ',
+                     'questions': [
+                         {'status': 'answered', 'question': '왜 주변 단어로 맞혀요?', 'answer': '문맥을 배우려고.'},
+                         {'status': 'unseen', 'question': '창 크기는 어떻게 정해요?', 'answer': None},
+                     ]},
+                    {'term_id': None, 'name': '그 밖에 배운 내용', 'concept': '단어를 벡터로 바꾼다.', 'questions': []},
+                    {'term_id': 999999, 'name': '없는 용어', 'concept': '요청에 없던 용어 → term_id null', 'questions': []},
+                ],
+            },
             '/exams/generate': {'questions': [
                 {'number': 1, 'question_type': 'multiple_choice', 'content': 'CBOW가 맞히는 것은?',
                  'choices': ['가운데 단어', '주변 단어'], 'correct_answer': '0', 'explanation': '해설1',
@@ -122,7 +136,19 @@ class LessonFinishTests(FinishFixture):
                          ['/lessons/note', '/exams/generate', '/exams/solve', '/exams/grade', '/reports/generate'])
         self.assertEqual(self.lesson.status, 'completed')
         self.assertIsNone(self.lesson.error)
-        self.assertEqual(Note.objects.get(lesson=self.lesson).content, '# word2vec 정리노트\n\n선생님이 말씀하셨다.')
+        note = Note.objects.get(lesson=self.lesson)
+        self.assertEqual(note.content, '# word2vec 정리노트\n\n선생님이 말씀하셨다.')
+        self.assertEqual([(s['term_id'], s['name']) for s in note.sections], [
+            (self.term_ids['분산 표현'], '분산 표현'), (self.term_ids['원핫 표현'], '원핫 표현'),
+            (self.term_ids['CBOW'], 'CBOW'), (None, '그 밖에 배운 내용'), (None, '없는 용어'),
+        ])
+        self.assertEqual(note.sections[2], {
+            'term_id': self.term_ids['CBOW'], 'name': 'CBOW', 'concept': 'CBOW = 주변 단어로 가운데 단어 맞히기',
+            'questions': [
+                {'status': 'answered', 'question': '왜 주변 단어로 맞혀요?', 'answer': '문맥을 배우려고.'},
+                {'status': 'unseen', 'question': '창 크기는 어떻게 정해요?', 'answer': None},
+            ],
+        })
 
         exam = self.exam()
         self.assertEqual((exam.status, exam.question_count, exam.correct_count, exam.score), ('completed', 3, 2, 67))
@@ -161,6 +187,11 @@ class LessonFinishTests(FinishFixture):
         self.assertEqual(note['title'], 'word2vec')
         self.assertEqual(note['persona']['code'], 'minjun')
         self.assertEqual([m['kind'] for m in note['messages']], ['greeting', 'explanation'])
+        # 체크리스트 순서의 용어 (정의는 보내지 않음), 질문받지 않은 손 든 이유
+        self.assertEqual(note['terms'], [
+            {'term_id': self.term_ids[name], 'name': name} for name in ['분산 표현', '원핫 표현', 'CBOW']
+        ])
+        self.assertEqual(note['raised_reasons'], ['아직 질문 안 함'])
 
         generate = self.server.payload('/exams/generate')
         self.assertEqual((generate['kind'], generate['count'], generate['summary']), ('evaluation', 5, summary))
@@ -182,10 +213,12 @@ class LessonFinishTests(FinishFixture):
 
     def test_student_ai_never_sees_answers_definitions_or_summary(self):
         self.evaluate()
-        for path in ['/lessons/note', '/exams/solve']:
+        secrets = ['해설1', '의 정의', self.lesson.material.summary, 'correct_answer', 'definition']
+        # 정리노트는 용어별로 나누려고 체크리스트 용어의 id와 이름만 받는다. 문제를 푸는 쪽은 어느 용어 문제인지도 모른다.
+        for path, extra in [('/lessons/note', []), ('/exams/solve', ['term_id'])]:
             with self.subTest(path=path):
                 text = json.dumps(self.server.payload(path), ensure_ascii=False)
-                for secret in ['해설1', '의 정의', self.lesson.material.summary, 'correct_answer', 'term_id']:
+                for secret in secrets + extra:
                     self.assertNotIn(secret, text)
 
     def test_only_multiple_choice_skips_grading(self):
@@ -422,8 +455,14 @@ class LessonNoteTests(FinishFixture):
         note = Note.objects.create(lesson=self.lesson, content='# 정리노트')
         body = self.get().json()
         self.assertEqual(body, {'id': note.id, 'lesson_id': self.lesson.id, 'persona_name': '민준',
-                                'content': '# 정리노트', 'created_at': body['created_at']})
+                                'content': '# 정리노트', 'sections': [], 'created_at': body['created_at']})
         self.assertTrue(body['created_at'].endswith('+09:00'))
+
+    def test_note_with_sections(self):
+        sections = [{'term_id': self.term_ids['CBOW'], 'name': 'CBOW', 'concept': '주변으로 가운데 맞히기',
+                     'questions': [{'status': 'unseen', 'question': '왜요?', 'answer': None}]}]
+        Note.objects.create(lesson=self.lesson, content='# 정리노트', sections=sections)
+        self.assertEqual(self.get().json()['sections'], sections)
 
     def test_not_ready_is_409(self):
         assert_error(self, self.get(), 409, 'NOTE_NOT_READY')
@@ -434,3 +473,37 @@ class LessonNoteTests(FinishFixture):
         assert_error(self, self.client.get(f'{URL}/999999/note'), 404, 'NOT_FOUND')
         assert_error(self, self.get(client=client_for(make_user(email='o@gmail.com'))), 403, 'FORBIDDEN')
         assert_error(self, self.get(client=APIClient()), 401, 'UNAUTHORIZED')
+
+
+class ParseNoteTests(SimpleTestCase):
+    """정리노트 응답 확인 (ai.parse_note). 틀리면 ValueError → ai_client가 한 번 다시 부른다."""
+
+    def section(self, **fields):
+        return {'term_id': 1, 'name': '스택', 'concept': '개념', 'questions': [], **fields}
+
+    def parse(self, *sections, **body):
+        return ai.parse_note({'content': '# 노트', 'terms': list(sections), **body}, term_ids={1, 2})
+
+    def test_without_terms_gives_empty_sections(self):
+        self.assertEqual(ai.parse_note({'content': '# 노트'}, term_ids={1}), ('# 노트', []))
+
+    def test_unknown_term_id_becomes_none(self):
+        _, sections = self.parse(self.section(term_id=3))
+        self.assertIsNone(sections[0]['term_id'])
+
+    def test_bad_shapes(self):
+        bad = {
+            'terms가 배열이 아님': {'terms': {}},
+            '항목이 객체가 아님': {'terms': ['스택']},
+            'term_id가 문자열': {'terms': [self.section(term_id='1')]},
+            'term_id가 true': {'terms': [self.section(term_id=True)]},
+            '이름이 빔': {'terms': [self.section(name=' ')]},
+            'concept 없음': {'terms': [self.section(concept=None)]},
+            'questions가 배열이 아님': {'terms': [self.section(questions=None)]},
+            '모르는 status': {'terms': [self.section(questions=[{'status': 'asked', 'question': '?', 'answer': None}])]},
+            '질문이 빔': {'terms': [self.section(questions=[{'status': 'unseen', 'question': '', 'answer': None}])]},
+            'answer가 숫자': {'terms': [self.section(questions=[{'status': 'answered', 'question': '?', 'answer': 1}])]},
+        }
+        for name, body in bad.items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                ai.parse_note({'content': '# 노트', **body}, term_ids={1})
