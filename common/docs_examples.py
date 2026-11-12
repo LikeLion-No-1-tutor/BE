@@ -41,7 +41,7 @@ COMPONENTS = {
     # 페르소나
     'Persona': {
         'id': 2, 'code': 'minjun', 'name': '민준', 'grade_label': '고1',
-        'description': '교과서 수준은 알아요. 이유를 자주 물어요.',
+        'description': '"왜요?"를 파고들고, 이해하면 자기 말로 정리해요.',
     },
     'PersonaBrief': {'id': 2, 'name': '민준', 'grade_label': '고1'},
 
